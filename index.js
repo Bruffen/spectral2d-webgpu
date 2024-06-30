@@ -3,13 +3,13 @@ async function start() {
         alert('this browser does not support WebGPU');
         return;
     }
-    
+
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
         alert('this browser supports webgpu but it appears disabled');
         return;
     }
-    
+
     const device = await adapter?.requestDevice();
     device.lost.then((info) => {
         console.error(`WebGPU device was lost: ${info.message}`);
@@ -38,6 +38,29 @@ const rand = (min, max) => {
     return min + Math.random() * (max - min);
 };
 
+var light = new Light(LightType.POINT, [0.0, 0.0], 50.0);
+
+function createLine() {
+    const length = rand(1.0, 4.0);
+    const width = 1.0;
+    const direction = light.createRay();
+
+    // 2 vertices, 2 values (x,y) each
+    const vertexCount = 2;
+    const vertexData = new Float32Array(vertexCount * 2);
+
+    let offset = 0;
+    const addVertex = (x, y) => {
+        vertexData[offset++] = x;
+        vertexData[offset++] = y;
+    };
+
+    addVertex(light.position[0], light.position[1]);
+    addVertex(light.position[0] + direction[0] * length, light.position[1] + direction[1] * length);
+
+    return {vertexData, vertexCount};
+}
+
 function main(device) {
     // Get a WebGPU context from the canvas and configure it
     const canvas = document.querySelector('#c');
@@ -48,9 +71,14 @@ function main(device) {
         format: presentationFormat,
     });
 
-    const vsModule = device.createShaderModule({
+    const module = device.createShaderModule({
         label: 'hardcoded triangle',
         code: `
+            struct VSOutput {
+                @builtin(position) position: vec4f,
+                @location(0) color: vec4f,
+            };
+            
             struct OurStruct {
                 color: vec4f,
                 offset: vec2f,
@@ -60,33 +88,29 @@ function main(device) {
                 scale: vec2f,
             };
 
-            @group(0) @binding(0) var<uniform> ourStruct: OurStruct;
-            @group(0) @binding(1) var<uniform> otherStruct: OtherStruct;
-
-            @vertex fn vs(@builtin(vertex_index) vertexIndex : u32) -> @builtin(position) vec4f {
-                let pos = array(
-                    vec2f( 0.0,  0.5),  // top center
-                    vec2f(-0.5, -0.5),  // bottom left
-                    vec2f( 0.5, -0.5)   // bottom right
-                );
-
-                return vec4f(pos[vertexIndex] * otherStruct.scale + ourStruct.offset, 0.0, 1.0);
-            }
-        `,
-    });
-
-    const fsModule = device.createShaderModule({
-        label: 'triangle',
-        code: `
-            struct OurStruct {
-                color: vec4f,
-                offset: vec2f,
+            struct Vertex {
+                position: vec2f,
             };
+            
+            @group(0) @binding(0) var<storage, read> ourStructs: array<OurStruct>;
+            @group(0) @binding(1) var<storage, read> otherStructs: array<OtherStruct>;
+            @group(0) @binding(2) var<storage, read> pos: array<Vertex>;
 
-            @group(0) @binding(0) var<uniform> ourStruct: OurStruct;
+            @vertex fn vs(
+                @builtin(vertex_index) vertexIndex : u32,
+                @builtin(instance_index) instanceIndex: u32
+            ) -> VSOutput {
+                let otherStruct = otherStructs[instanceIndex];
+                let ourStruct = ourStructs[instanceIndex];
 
-            @fragment fn fs() -> @location(0) vec4f {
-                return ourStruct.color;
+                var vsOut: VSOutput;
+                vsOut.position = vec4f(pos[vertexIndex].position * otherStruct.scale + ourStruct.offset, 0.0, 1.0);
+                vsOut.color = ourStruct.color;
+                return vsOut;
+            }
+
+            @fragment fn fs(vsOut: VSOutput) -> @location(0) vec4f {
+                return vsOut.color;
             }
         `,
     });
@@ -95,73 +119,89 @@ function main(device) {
         label: 'our hardcoded rgb triangle pipeline',
         layout: 'auto',
         vertex: {
-            module: vsModule,
+            module: module,
         },
         fragment: {
-            module: fsModule,
+            module: module,
             targets: [{ format: presentationFormat }],
+        },
+        primitive: {
+            topology: 'line-list',
         },
     });
 
-    // create 2 buffers for the uniform values
-    const staticUniformBufferSize =
+    const kNumObjects = 100;
+    const objectInfos = [];
+
+    // create 2 storage buffers
+    const staticUnitSize =
         4 * 4 + // color is 4 32bit floats (4bytes each)
         2 * 4 + // offset is 2 32bit floats (4bytes each)
         2 * 4;  // padding
-    const uniformBufferSize =
+    const changingUnitSize =
         2 * 4;  // scale is 2 32bit floats (4bytes each)
-    
+    const staticStorageBufferSize = staticUnitSize * kNumObjects;
+    const changingStorageBufferSize = changingUnitSize * kNumObjects;
+
+    const staticStorageBuffer = device.createBuffer({
+        label: 'static storage for objects',
+        size: staticStorageBufferSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
+    const changingStorageBuffer = device.createBuffer({
+        label: 'changing storage for objects',
+        size: changingStorageBufferSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
     // offsets to the various uniform values in float32 indices
     const kColorOffset = 0;
     const kOffsetOffset = 4;
-    
+
     const kScaleOffset = 0;
-    
-    const kNumObjects = 100;
-    const objectInfos = [];
-   
-    for (let i = 0; i < kNumObjects; ++i) {
-        const staticUniformBuffer = device.createBuffer({
-            label: `static uniforms for obj: ${i}`,
-            size: staticUniformBufferSize,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-    
-        // These are only set once so set them now
-        {
-            const uniformValues = new Float32Array(staticUniformBufferSize / 4);
-            uniformValues.set([rand(), rand(), rand(), 1], kColorOffset);        // set the color
-            uniformValues.set([rand(-0.9, 0.9), rand(-0.9, 0.9)], kOffsetOffset);      // set the offset
-    
-            // copy these values to the GPU
-            device.queue.writeBuffer(staticUniformBuffer, 0, uniformValues);
+
+    {
+        const staticStorageValues = new Float32Array(staticStorageBufferSize / 4);
+        for (let i = 0; i < kNumObjects; ++i) {
+            const staticOffset = i * (staticUnitSize / 4);
+
+            // These are only set once so set them now
+            staticStorageValues.set([rand(), rand(), rand(), 1], staticOffset + kColorOffset);        // set the color
+            staticStorageValues.set([rand(-0.9, 0.9), rand(-0.9, 0.9)], staticOffset + kOffsetOffset);      // set the offset
+
+            objectInfos.push({
+                scale: rand(0.2, 0.5),
+            });
         }
-    
-        // create a typedarray to hold the values for the uniforms in JavaScript
-        const uniformValues = new Float32Array(uniformBufferSize / 4);
-        const uniformBuffer = device.createBuffer({
-            label: `changing uniforms for obj: ${i}`,
-            size: uniformBufferSize,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-   
-        const bindGroup = device.createBindGroup({
-            label: `bind group for obj: ${i}`,
-            layout: pipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: staticUniformBuffer }},
-                { binding: 1, resource: { buffer: uniformBuffer }},
-            ],
-        });
-   
-        objectInfos.push({
-            scale: rand(0.2, 0.5),
-            uniformBuffer,
-            uniformValues,
-            bindGroup,
-        });
+        device.queue.writeBuffer(staticStorageBuffer, 0, staticStorageValues);
     }
-    
+
+    // a typed array we can use to update the changingStorageBuffer
+    const storageValues = new Float32Array(changingStorageBufferSize / 4);
+
+    // setup a storage buffer with vertex data
+    const { vertexData, vertexCount } = createLine({
+        radius: 0.5,
+        innerRadius: 0.25,
+    });
+    const vertexStorageBuffer = device.createBuffer({
+        label: 'storage buffer vertices',
+        size: vertexData.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(vertexStorageBuffer, 0, vertexData);
+
+    const bindGroup = device.createBindGroup({
+        label: 'bind group for objects',
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: staticStorageBuffer }},
+            { binding: 1, resource: { buffer: changingStorageBuffer }},
+            { binding: 2, resource: { buffer: vertexStorageBuffer }},
+        ],
+    });
+
     const renderPassDescriptor = {
         label: 'our basic canvas renderPass',
         colorAttachments: [{
@@ -177,7 +217,7 @@ function main(device) {
         // set it as the texture to render to.
         renderPassDescriptor.colorAttachments[0].view =
             context.getCurrentTexture().createView();
-     
+
         // make a command encoder to start encoding commands
         const encoder = device.createCommandEncoder({ label: 'our encoder' });
 
@@ -187,25 +227,29 @@ function main(device) {
 
         // Set the uniform values in our JavaScript side Float32Array
         const aspect = canvas.width / canvas.height;
- 
-        for (const {scale, bindGroup, uniformBuffer, uniformValues} of objectInfos) {
-            uniformValues.set([scale / aspect, scale], kScaleOffset); // set the scale
-            device.queue.writeBuffer(uniformBuffer, 0, uniformValues);
-            pass.setBindGroup(0, bindGroup);
-            pass.draw(3);  // call our vertex shader 3 times
-        }
+
+        // set the scales for each object
+        objectInfos.forEach(({ scale }, ndx) => {
+            const offset = ndx * (changingUnitSize / 4);
+            storageValues.set([scale / aspect, scale], offset + kScaleOffset); // set the scale
+        });
+        // upload all scales at once
+        device.queue.writeBuffer(changingStorageBuffer, 0, storageValues);
+
+        pass.setBindGroup(0, bindGroup);
+        pass.draw(vertexCount, kNumObjects);
         pass.end();
-     
+
         const commandBuffer = encoder.finish();
         device.queue.submit([commandBuffer]);
     }
-     
+
     const observer = new ResizeObserver(entries => {
         for (const entry of entries) {
             const width = entry.devicePixelContentBoxSize?.[0].inlineSize ||
-                        entry.contentBoxSize[0].inlineSize * devicePixelRatio;
+                entry.contentBoxSize[0].inlineSize * devicePixelRatio;
             const height = entry.devicePixelContentBoxSize?.[0].blockSize ||
-                            entry.contentBoxSize[0].blockSize * devicePixelRatio;
+                entry.contentBoxSize[0].blockSize * devicePixelRatio;
             const canvas = entry.target;
             canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
             canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));

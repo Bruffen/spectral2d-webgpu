@@ -3,6 +3,6 @@ html, body {
     height: 100%;    /* make the html,body fill the page   */
 }
 canvas {
-    width: 1280px;
-    height: 720px;
+    width: 900px;
+    height: 600px;
 }
