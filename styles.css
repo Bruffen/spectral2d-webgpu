@@ -1,6 +1,7 @@
 html, body {
     /*margin: 0;       /* remove the default margin          */
     height: 100%;    /* make the html,body fill the page   */
+    background-color: black;
 }
 canvas {
     width: 900px;
