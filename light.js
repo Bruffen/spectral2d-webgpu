@@ -15,7 +15,7 @@ class Light {
                 var angle = Math.random() * Math.PI * 2.0;
                 var x = Math.cos(angle);
                 var y = Math.sin(angle);
-                return [x, y];
+                return new Vector2(x, y);
         }
     }
 }
