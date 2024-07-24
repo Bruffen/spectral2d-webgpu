@@ -75,8 +75,8 @@ class RenderPass {
         raysRenderPass.setBindGroup(0, this.raysBindGroup);
         raysRenderPass.draw(this.verticesPerRay, this.rayAmount);
         raysRenderPass.end();
-        this.raysCommandBuffer = raysEncoder.finish();
+        const raysCommandBuffer = raysEncoder.finish();
 
-        this.device.queue.submit([this.raysCommandBuffer]);
+        this.device.queue.submit([raysCommandBuffer]);
     }
 }

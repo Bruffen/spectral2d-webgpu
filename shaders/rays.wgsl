@@ -21,7 +21,6 @@ struct Color {
     var vsOut: VSOutput;
     vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2].position, 0.0, 1.0);
     vsOut.color = colors[instanceIndex].color;
-    //vsOut.color = vec4f(pow(vsOut.color.rgb, vec3f(1.0/2.2)), vsOut.color.a);
     return vsOut;
 }
 

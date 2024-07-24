@@ -1,24 +1,41 @@
+const canvas = document.querySelector('#c');
+
+let style = getComputedStyle(canvas);
+const width = style.width.replace(/[^0-9]/g, '');
+const height = style.height.replace(/[^0-9]/g, '');
+const resolution = [width, height];
+
+//const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+const presentationFormat = 'rgba16float';
+const highResFormat = 'rgba32float';
+
 var frameCounter = 1;
 
 const light = new Light(LightType.POINT, new Vector2(0.0, 0.0), 500.0);
 
-const resolution = [900, 900];
-//const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-const presentationFormat = 'rgba16float'; // TODO forcing a higher resolution on the canvas like this might be slow!
-
 async function start() {
     if (!navigator.gpu) {
-        alert('This browser does not support WebGPU');
+        alert('This browser does not support WebGPU.');
         return;
     }
 
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
-        alert('This browser supports webgpu but it appears disabled');
+        alert('This browser supports webgpu but it appears disabled.');
         return;
     }
 
-    const device = await adapter?.requestDevice();
+    const canUseFloat32Filterable = adapter?.features.has('float32-filterable');
+ 
+    if (!canUseFloat32Filterable) {
+        alert('Sorry, your device doesn\'t support float32-filterable feature.');
+        return;
+    }
+
+    const device = await adapter?.requestDevice({
+        requiredFeatures: [ 'float32-filterable' ],
+    });
+
     device.lost.then((info) => {
         console.error(`WebGPU device was lost: ${info.message}`);
         if (info.reason !== 'destroyed') {
@@ -32,27 +49,27 @@ async function start() {
 start();
 
 function main(device) {
-    const canvas = document.querySelector('#c');
     const context = canvas.getContext('webgpu');
 
     context.configure({
         device,
         format: presentationFormat,
         //alphaMode: 'premultiplied',
-        usage: GPUTextureUsage.COPY_DST
+        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT, 
     });
 
     const frameCounterBuffer = device.createBuffer({
         label: 'Frame counter uniform',
         size: 4,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, //TODO remove COPY_DST
     });
     device.queue.writeBuffer(frameCounterBuffer, 0, new Uint32Array([frameCounter]));
 
-    const rayAmount  = 20000;
-    const tracePass  = new TracePass(device, rayAmount, 1);
-    const renderPass = new RenderPass(device, tracePass.verticesPerRay, rayAmount, tracePass.vertexStorageBuffer, tracePass.colorStorageBuffer);
-    const accumPass  = new AccumulatePass(device, renderPass.raysRenderTexture, frameCounterBuffer);
+    const rayAmount   = 15000;
+    const tracePass   = new TracePass(device, rayAmount, 1);
+    const renderPass  = new RenderPass(device, tracePass.verticesPerRay, rayAmount, tracePass.vertexStorageBuffer, tracePass.colorStorageBuffer);
+    const accumPass   = new AccumulatePass(device, renderPass.raysRenderTexture, frameCounterBuffer);
+    const blitPass    = new BlitPass(device, accumPass.newAccumulateRenderTexture);
 
     const observer = new ResizeObserver(entries => {
         for (const entry of entries) {
@@ -76,23 +93,32 @@ function main(device) {
         tracePass.run();
         renderPass.run();
         accumPass.run();
-
+        
+        /*
+        // Only copies between same texture formats are allowed, so we are limited to 16 bit floats.
         const blitEncoder = device.createCommandEncoder({ label: 'Blit to canvas encoder' });
         blitEncoder.copyTextureToTexture(
-            { texture: accumPass.newAverageRenderTexture }, 
+            { texture: accumPass.newAccumulateRenderTexture }, 
             { texture: context.getCurrentTexture() }, 
             resolution
-        );
-        const blitCommandBuffer = blitEncoder.finish();
-        device.queue.submit([blitCommandBuffer]);
-    
+            );
+            const blitCommandBuffer = blitEncoder.finish();
+            device.queue.submit([blitCommandBuffer]);
+        */
+        
+        /**
+         * Hack to allow 32 bit floats for some of the computation and then present at 16 bit.
+         * Requires 'float32-filterable' feature, however.
+         */
+        blitPass.run(context.getCurrentTexture());
+           
         frameCounter++;
         device.queue.writeBuffer(frameCounterBuffer, 0, new Uint32Array([frameCounter]));
     
-        if (frameCounter < 300) {
+        if (frameCounter < 1000) {
             requestAnimationFrame(render);
         }
-        if (frameCounter == 300) {
+        if (frameCounter == 1000) {
             console.log("Rendering over");
         }
     }

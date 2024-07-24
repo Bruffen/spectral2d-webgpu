@@ -7,16 +7,16 @@ class AccumulatePass {
     }
 
     setup() {
-        const averageModule = this.device.createShaderModule({
-            label: 'Average result shader',
-            code: shaderAverage,
+        const accumulateModule = this.device.createShaderModule({
+            label: 'Accumulate shader',
+            code: shaderAccumulate,
         });
     
-        this.averagePipeline = this.device.createRenderPipeline({
-            label: 'Average result pipeline',
+        this.accumulatePipeline = this.device.createRenderPipeline({
+            label: 'Accumulate pipeline',
             layout: 'auto',
             vertex: {
-                module: averageModule,
+                module: accumulateModule,
                 buffers: [{
                     arrayStride: 2 * 4, // 2 floats, 4 bytes each
                     attributes: [
@@ -25,9 +25,9 @@ class AccumulatePass {
                 ],
             },
             fragment: {
-                module: averageModule,
+                module: accumulateModule,
                 targets: [{
-                    format: presentationFormat,
+                    format: highResFormat,
                 }],
             },
             primitive: {
@@ -49,43 +49,42 @@ class AccumulatePass {
         });
         this.device.queue.writeBuffer(this.quadBuffer, 0, quadData);
 
-        this.lastAverageTexture = this.device.createTexture({
+        this.lastAccumulateTexture = this.device.createTexture({
             label: "Last average texture",
             size: resolution,
-            format: presentationFormat,
+            format: highResFormat,
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
 
-        this.newAverageRenderTexture = this.device.createTexture({
+        this.newAccumulateRenderTexture = this.device.createTexture({
             label: "New average render texture",
             size: resolution,
-            format: presentationFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+            format: highResFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
         });
-    
+
         const sampler = this.device.createSampler({
             addressModeU: 'clamp-to-edge',
             addressModeV: 'clamp-to-edge',
-            magFilter: 'linear',
-            minFilter: 'linear',
+            magFilter: 'nearest',
+            minFilter: 'nearest',
         });
-    
-        this.averageBindGroup = this.device.createBindGroup({
-            label: 'Average result render binding',
-            layout: this.averagePipeline.getBindGroupLayout(0),
+
+        this.accumulateBindGroup = this.device.createBindGroup({
+            label: 'Accumulate pass binding',
+            layout: this.accumulatePipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: this.frameCounterBuffer } },
                 { binding: 1, resource: sampler },
                 { binding: 2, resource: this.raysRenderTexture.createView() },
-                { binding: 3, resource: sampler },
-                { binding: 4, resource: this.lastAverageTexture.createView() },
+                { binding: 3, resource: this.lastAccumulateTexture.createView() },
             ],
         });
-    
-        this.averageRenderPassDescriptor = {
-            label: 'Average result renderpass',
+
+        this.accumulateRenderPassDescriptor = {
+            label: 'Accumulate renderpass',
             colorAttachments: [{
-                view: this.newAverageRenderTexture.createView(),
+                view: this.newAccumulateRenderTexture.createView(),
                 clearValue: [1.0, 0.0, 0.0, 1.0],
                 loadOp: 'clear',
                 storeOp: 'store',
@@ -95,23 +94,23 @@ class AccumulatePass {
     }
     
     run() {
-        const averageEncoder = this.device.createCommandEncoder({ label: 'Average result encoder' });
-        const averageRenderPass = averageEncoder.beginRenderPass(this.averageRenderPassDescriptor);
-        averageRenderPass.setPipeline(this.averagePipeline);
-        averageRenderPass.setBindGroup(0, this.averageBindGroup);
-        averageRenderPass.setVertexBuffer(0, this.quadBuffer);
-        averageRenderPass.draw(4, 1);
-        averageRenderPass.end();
-        this.averageCommandBuffer = averageEncoder.finish();
-        this.device.queue.submit([this.averageCommandBuffer]);
+        const accumulateEncoder = this.device.createCommandEncoder({ label: 'Accumulate encoder' });
+        const accumulateRenderPass = accumulateEncoder.beginRenderPass(this.accumulateRenderPassDescriptor);
+        accumulateRenderPass.setPipeline(this.accumulatePipeline);
+        accumulateRenderPass.setBindGroup(0, this.accumulateBindGroup);
+        accumulateRenderPass.setVertexBuffer(0, this.quadBuffer);
+        accumulateRenderPass.draw(4, 1);
+        accumulateRenderPass.end();
+        const accumulateCommandBuffer = accumulateEncoder.finish();
     
-        const averageBlitEncoder = this.device.createCommandEncoder({ label: 'Blit to average render texture' });
-        averageBlitEncoder.copyTextureToTexture(
-            {texture: this.newAverageRenderTexture}, 
-            {texture: this.lastAverageTexture}, 
+        const blitEncoder = this.device.createCommandEncoder({ label: 'Blit to last accum texture' });
+        blitEncoder.copyTextureToTexture(
+            {texture: this.newAccumulateRenderTexture}, 
+            {texture: this.lastAccumulateTexture}, 
             resolution
         );
-        this.averageBlitCommandBuffer = averageBlitEncoder.finish();
-        this.device.queue.submit([this.averageBlitCommandBuffer]);
+        const blitCommandBuffer = blitEncoder.finish();
+        
+        this.device.queue.submit([accumulateCommandBuffer, blitCommandBuffer]);
     }
 }

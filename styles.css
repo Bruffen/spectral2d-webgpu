@@ -4,6 +4,6 @@ html, body {
     background-color: black;
 }
 canvas {
-    width: 900px;
-    height: 900px;
+    width: 700px;
+    height: 700px;
 }
