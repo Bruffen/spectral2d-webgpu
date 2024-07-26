@@ -7,16 +7,16 @@ class AccumulatePass {
     }
 
     setup() {
-        const accumulateModule = this.device.createShaderModule({
+        const module = this.device.createShaderModule({
             label: 'Accumulate shader',
             code: shaderAccumulate,
         });
     
-        this.accumulatePipeline = this.device.createRenderPipeline({
+        this.pipeline = this.device.createRenderPipeline({
             label: 'Accumulate pipeline',
             layout: 'auto',
             vertex: {
-                module: accumulateModule,
+                module: module,
                 buffers: [{
                     arrayStride: 2 * 4, // 2 floats, 4 bytes each
                     attributes: [
@@ -25,9 +25,9 @@ class AccumulatePass {
                 ],
             },
             fragment: {
-                module: accumulateModule,
+                module: module,
                 targets: [{
-                    format: highResFormat,
+                    format: highPrecisionFormat,
                 }],
             },
             primitive: {
@@ -52,14 +52,14 @@ class AccumulatePass {
         this.lastAccumulateTexture = this.device.createTexture({
             label: "Last average texture",
             size: resolution,
-            format: highResFormat,
+            format: highPrecisionFormat,
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
 
         this.newAccumulateRenderTexture = this.device.createTexture({
             label: "New average render texture",
             size: resolution,
-            format: highResFormat,
+            format: highPrecisionFormat,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
         });
 
@@ -70,9 +70,9 @@ class AccumulatePass {
             minFilter: 'nearest',
         });
 
-        this.accumulateBindGroup = this.device.createBindGroup({
+        this.bindGroup = this.device.createBindGroup({
             label: 'Accumulate pass binding',
-            layout: this.accumulatePipeline.getBindGroupLayout(0),
+            layout: this.pipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: this.frameCounterBuffer } },
                 { binding: 1, resource: sampler },
@@ -81,7 +81,7 @@ class AccumulatePass {
             ],
         });
 
-        this.accumulateRenderPassDescriptor = {
+        this.renderPassDescriptor = {
             label: 'Accumulate renderpass',
             colorAttachments: [{
                 view: this.newAccumulateRenderTexture.createView(),
@@ -94,23 +94,23 @@ class AccumulatePass {
     }
     
     run() {
-        const accumulateEncoder = this.device.createCommandEncoder({ label: 'Accumulate encoder' });
-        const accumulateRenderPass = accumulateEncoder.beginRenderPass(this.accumulateRenderPassDescriptor);
-        accumulateRenderPass.setPipeline(this.accumulatePipeline);
-        accumulateRenderPass.setBindGroup(0, this.accumulateBindGroup);
-        accumulateRenderPass.setVertexBuffer(0, this.quadBuffer);
-        accumulateRenderPass.draw(4, 1);
-        accumulateRenderPass.end();
-        const accumulateCommandBuffer = accumulateEncoder.finish();
+        const encoder = this.device.createCommandEncoder({ label: 'Accumulate encoder' });
+        const renderPass = encoder.beginRenderPass(this.renderPassDescriptor);
+        renderPass.setPipeline(this.pipeline);
+        renderPass.setBindGroup(0, this.bindGroup);
+        renderPass.setVertexBuffer(0, this.quadBuffer);
+        renderPass.draw(4, 1);
+        renderPass.end();
+        const commandBuffer = encoder.finish();
     
-        const blitEncoder = this.device.createCommandEncoder({ label: 'Blit to last accum texture' });
-        blitEncoder.copyTextureToTexture(
+        const copyEncoder = this.device.createCommandEncoder({ label: 'Copy to last accum texture' });
+        copyEncoder.copyTextureToTexture(
             {texture: this.newAccumulateRenderTexture}, 
             {texture: this.lastAccumulateTexture}, 
             resolution
         );
-        const blitCommandBuffer = blitEncoder.finish();
+        const copyCommandBuffer = copyEncoder.finish();
         
-        this.device.queue.submit([accumulateCommandBuffer, blitCommandBuffer]);
+        this.device.queue.submit([commandBuffer, copyCommandBuffer]);
     }
 }

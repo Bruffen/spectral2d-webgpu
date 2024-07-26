@@ -27,7 +27,7 @@ class BlitPass {
             fragment: {
                 module: module,
                 targets: [{
-                    format: presentationFormat,
+                    format: lowPrecisionFormat,
                 }],
             },
             primitive: {

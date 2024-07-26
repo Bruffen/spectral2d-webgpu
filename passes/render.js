@@ -1,8 +1,9 @@
 class RenderPass {
-    constructor(device, verticesPerRay, rayAmount, vertexStorageBuffer, colorStorageBuffer) {
+    constructor(device, verticesPerRay, rayAmount, rayDepth, vertexStorageBuffer, colorStorageBuffer) {
         this.device = device;
         this.verticesPerRay = verticesPerRay;
         this.rayAmount = rayAmount;
+        this.rayDepth = rayDepth;
         this.vertexStorageBuffer = vertexStorageBuffer;
         this.colorStorageBuffer = colorStorageBuffer;
         this.setup();
@@ -12,11 +13,11 @@ class RenderPass {
         this.raysRenderTexture = this.device.createTexture({
             label: "Rays render texture",
             size: resolution,
-            format: presentationFormat,
+            format: lowPrecisionFormat,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
 
-        const raysModule = this.device.createShaderModule({
+        const module = this.device.createShaderModule({
             label: 'Rays render shader',
             code: shaderRays,
         });
@@ -27,16 +28,16 @@ class RenderPass {
             dstFactor: 'one-minus-src-alpha'
         };
 
-        this.raysPipeline = this.device.createRenderPipeline({
+        this.pipeline = this.device.createRenderPipeline({
             label: 'Render rays pipeline',
             layout: 'auto',
             vertex: {
-                module: raysModule,
+                module: module,
             },
             fragment: {
-                module: raysModule,
+                module: module,
                 targets: [{
-                    format: presentationFormat,
+                    format: lowPrecisionFormat,
                     blend: {
                         color: blend,
                         alpha: blend,
@@ -48,16 +49,16 @@ class RenderPass {
             },
         });
     
-        this.raysBindGroup = this.device.createBindGroup({
+        this.bindGroup = this.device.createBindGroup({
             label: 'Rays render binding',
-            layout: this.raysPipeline.getBindGroupLayout(0),
+            layout: this.pipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: this.vertexStorageBuffer } },
                 { binding: 1, resource: { buffer: this.colorStorageBuffer } },
             ],
         });
 
-        this.raysRenderPassDescriptor = {
+        this.renderPassDescriptor = {
             label: 'Rays render renderpass',
             colorAttachments: [{
                 view: this.raysRenderTexture.createView(),
@@ -69,14 +70,14 @@ class RenderPass {
     }
     
     run() {
-        const raysEncoder = this.device.createCommandEncoder({ label: 'Ray render encoder' });
-        const raysRenderPass = raysEncoder.beginRenderPass(this.raysRenderPassDescriptor);
-        raysRenderPass.setPipeline(this.raysPipeline);
-        raysRenderPass.setBindGroup(0, this.raysBindGroup);
-        raysRenderPass.draw(this.verticesPerRay, this.rayAmount);
-        raysRenderPass.end();
-        const raysCommandBuffer = raysEncoder.finish();
+        const encoder = this.device.createCommandEncoder({ label: 'Ray render encoder' });
+        const renderPass = encoder.beginRenderPass(this.renderPassDescriptor);
+        renderPass.setPipeline(this.pipeline);
+        renderPass.setBindGroup(0, this.bindGroup);
+        renderPass.draw(this.verticesPerRay, this.rayAmount * this.rayDepth);
+        renderPass.end();
+        const commandBuffer = encoder.finish();
 
-        this.device.queue.submit([raysCommandBuffer]);
+        this.device.queue.submit([commandBuffer]);
     }
 }
