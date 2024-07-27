@@ -1,6 +1,9 @@
-class RenderPass {
-    constructor(device, verticesPerRay, rayAmount, rayDepth, vertexStorageBuffer, colorStorageBuffer) {
+import { shaderRays } from "../shaders/shaders.js";
+
+export class RenderPass {
+    constructor(device, settings, verticesPerRay, rayAmount, rayDepth, vertexStorageBuffer, colorStorageBuffer) {
         this.device = device;
+        this.settings = settings;
         this.verticesPerRay = verticesPerRay;
         this.rayAmount = rayAmount;
         this.rayDepth = rayDepth;
@@ -12,8 +15,8 @@ class RenderPass {
     setup() {
         this.raysRenderTexture = this.device.createTexture({
             label: "Rays render texture",
-            size: resolution,
-            format: lowPrecisionFormat,
+            size: this.settings.resolution,
+            format: this.settings.lowPrecisionFormat,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
 
@@ -37,7 +40,7 @@ class RenderPass {
             fragment: {
                 module: module,
                 targets: [{
-                    format: lowPrecisionFormat,
+                    format: this.settings.lowPrecisionFormat,
                     blend: {
                         color: blend,
                         alpha: blend,
@@ -79,5 +82,9 @@ class RenderPass {
         const commandBuffer = encoder.finish();
 
         this.device.queue.submit([commandBuffer]);
+    }
+
+    reset() {
+
     }
 }

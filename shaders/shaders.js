@@ -1,4 +1,4 @@
-const shaderRays = 
+export const shaderRays = 
 `
 struct VSOutput {
     @builtin(position) position: vec4f,
@@ -31,7 +31,7 @@ struct Color {
 }
 `;
 
-const shaderAccumulate = 
+export const shaderAccumulate = 
 `
 struct Vertex {
     @location(0) position: vec2f,
@@ -67,7 +67,7 @@ struct VSOutput {
 }
 `;
 
-const shaderBlit = 
+export const shaderBlit = 
 `
 struct Vertex {
     @location(0) position: vec2f,
@@ -98,12 +98,18 @@ struct VSOutput {
 }
 `;
 
-const shaderTrace =
+export const shaderTrace =
 `
 struct Light {
     t: u32,
     position: vec2f,
+    direction: vec2f,
     power: f32,
+};
+
+struct Ray {
+    origin: vec2f,
+    direction: vec2f,
 };
 
 struct RayHit {
@@ -114,7 +120,7 @@ struct RayHit {
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2f>;
 @group(0) @binding(1) var<storage, read_write> colors:    array<vec4f>;
-@group(0) @binding(2) var<storage, read>       random:    array<f32>;
+@group(0) @binding(2) var<storage, read>       randoms:    array<f32>;
 @group(0) @binding(3) var<uniform> rayAmount : i32;
 @group(0) @binding(4) var<uniform> rayDepth  : i32;
 @group(0) @binding(5) var<uniform> light: Light;
@@ -167,7 +173,7 @@ fn intersect_box(origin : vec2f, direction : vec2f) -> vec2f {
 }
 
 fn intersect_circle(origin : vec2f, direction : vec2f) -> RayHit {
-    var center = vec2f(-0.4, 0.4);
+    var center = vec2f(-0.5, 0.5);
     var radius = 0.2;
     
     var hit : RayHit;
@@ -181,11 +187,11 @@ fn intersect_circle(origin : vec2f, direction : vec2f) -> RayHit {
     var sqrtd = sqrt(discriminant);
     var root = (h - sqrtd) / a;
 
-    if (root < 0.0 || root > 1000) {
+    if (root < 0.0 || root > 1000000) {
         root = (h + sqrtd) / a;
     }
 
-    if (root < 0.0 || root > 1000) {
+    if (root < 0.0 || root > 1000000) {
         hit.t = -1.0;
     } else {
         hit.t = root;
@@ -203,26 +209,49 @@ fn reflectance(cosine : f32, refraction_index : f32) -> f32 {
     return r0 + (1 - r0) * pow((1 - cosine), 5);
 }
 
+fn generateFromLight(random : f32) -> Ray {
+    var ray : Ray;
+
+    let M_PI = 3.1415926535897932384626433832795;
+
+    switch light.t {
+        case 0, default: { // Point
+            let angle = random * M_PI * 2.0;
+            ray.origin = light.position;
+            ray.direction = vec2f(cos(angle), sin(angle));
+        }
+        case 1: { // Beam
+            ray.direction = light.direction;
+            var ortogonal = vec2f(ray.direction.y, -ray.direction.x);
+
+            ray.origin = light.position + (random * 2.0 - 1.0) * ortogonal * 0.3;
+        }
+        case 2: { // Laser
+            ray.origin = light.position;
+            ray.direction = light.direction;
+        }
+    }
+
+    return ray;
+}
+
 @compute @workgroup_size(64) fn trace(@builtin(global_invocation_id) id: vec3u) {
     let i = i32(id.x);
 
-    let M_PI = 3.1415926535897932384626433832795;
-    let angle = random[i * rayDepth] * M_PI * 2.0;
     var length = 10.0;
 
-    var direction = vec2f(cos(angle), sin(angle));
-    var origin = light.position;
+    var ray = generateFromLight(randoms[i * rayDepth]);
 
-   for (var depth = 0; depth < rayDepth; depth++) {
+    for (var depth = 0; depth < rayDepth; depth++) {
         
-        var hit = intersect_circle(origin, direction);
+        var hit = intersect_circle(ray.origin, ray.direction);
         if (hit.t > 0.0) {
             length = hit.t;
         }
-        var step = direction * length;
+        var step = ray.direction * length;
 
-        positions[i * 2 * rayDepth + 0 + depth * 2] = origin; // correct for aspect ratio
-        positions[i * 2 * rayDepth + 1 + depth * 2] = origin + step;
+        positions[i * 2 * rayDepth + 0 + depth * 2] = ray.origin; // correct for aspect ratio
+        positions[i * 2 * rayDepth + 1 + depth * 2] = ray.origin + step;
 
         let aliasing = sqrt(step.x*step.x + step.y*step.y) / max(abs(step.x), abs(step.y));
         let brightness = light.power * aliasing * (1.0 / f32(rayAmount));
@@ -231,25 +260,25 @@ fn reflectance(cosine : f32, refraction_index : f32) -> f32 {
         if (hit.t > 0.0) {
             var index_refraction = 0.657;
 
-            if (dot(direction, hit.normal) > 0.0) {
+            if (dot(ray.direction, hit.normal) > 0.0) {
                 hit.normal = -hit.normal;
                 index_refraction = 1.0 / index_refraction;
             }
 
-            let r = random[i * rayDepth + depth];
+            let r = randoms[i * rayDepth + depth];
 
-            var cos_theta = min(dot(-direction, hit.normal), 1.0);
+            var cos_theta = min(dot(-ray.direction, hit.normal), 1.0);
             var sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 
             var cannot_refract = index_refraction * sin_theta > 1.0; // is this really needed?
 
             if (cannot_refract || reflectance(cos_theta, index_refraction) > r) {
-                direction = reflect(direction, hit.normal);
+                ray.direction = reflect(ray.direction, hit.normal);
             } else {
-                direction = refract(direction, hit.normal, index_refraction);
+                ray.direction = refract(ray.direction, hit.normal, index_refraction);
             }
         }
-        origin = origin + step + direction * 0.00001;
+        ray.origin = ray.origin + step + ray.direction * 0.00001;
 
         length = 10.0;
     }

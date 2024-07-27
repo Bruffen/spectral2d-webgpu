@@ -1,4 +1,6 @@
-class TracePass {
+import { shaderTrace } from "../shaders/shaders.js";
+
+export class TracePass {
     constructor(device, light, rayAmount, rayDepth) {
         this.verticesPerRay = 2;
 
@@ -68,24 +70,23 @@ class TracePass {
             1 * 4 + // type u32
             1 * 4 + // padding
             2 * 4 + // position vec2f
+            2 * 4 + // direction vec2f
             1 * 4 + // power f32
             1 * 4;  // padding
 
-        const lightUniform = this.device.createBuffer({
+        this.lightUniform = this.device.createBuffer({
             label: 'Light uniform',
             size: lightUniformSize,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, 
         });
         
-        const lightUniformValues = new ArrayBuffer(lightUniformSize);
-        const timeUniform     = new Uint32Array(lightUniformValues, 0, 1);
-        const positionUniform = new Float32Array(lightUniformValues, 8, 2);
-        const powerUniform    = new Float32Array(lightUniformValues, 16, 1);
+        this.lightUniformValues = new ArrayBuffer(lightUniformSize);
+        this.timeUniform      = new Uint32Array (this.lightUniformValues, 0, 1);
+        this.positionUniform  = new Float32Array(this.lightUniformValues, 8, 2);
+        this.directionUniform = new Float32Array(this.lightUniformValues, 16, 2);
+        this.powerUniform     = new Float32Array(this.lightUniformValues, 24, 1);
         
-        timeUniform[0]        = this.light.type;
-        positionUniform[0]    = this.light.position.x;
-        positionUniform[1]    = this.light.position.y;
-        powerUniform[0]       = this.light.power;
+        this.updateLightUniform();
 
         this.bindGroup = this.device.createBindGroup({
             label: 'Trace binding',
@@ -96,13 +97,12 @@ class TracePass {
                 { binding: 2, resource: { buffer: this.randomStorageBuffer } },
                 { binding: 3, resource: { buffer: rayAmountUniform } },
                 { binding: 4, resource: { buffer: rayDepthUniform } },
-                { binding: 5, resource: { buffer: lightUniform } },
+                { binding: 5, resource: { buffer: this.lightUniform } },
             ],
         });
 
         this.device.queue.writeBuffer(rayAmountUniform, 0, new Int32Array([this.rayAmount]));
         this.device.queue.writeBuffer(rayDepthUniform, 0, new Int32Array([this.rayDepth]));
-        this.device.queue.writeBuffer(lightUniform, 0, lightUniformValues);
     }
 
     run() {
@@ -125,6 +125,22 @@ class TracePass {
         pass.end();
         const commandBuffer = encoder.finish();
         this.device.queue.submit([commandBuffer]);
+    }
+
+    reset(light) {
+        this.light = light;
+        this.updateLightUniform();
+    }
+
+    updateLightUniform() {
+        this.timeUniform[0]      = this.light.type;
+        this.positionUniform[0]  = this.light.position.x;
+        this.positionUniform[1]  = this.light.position.y;
+        this.directionUniform[0] = this.light.direction.x;
+        this.directionUniform[1] = this.light.direction.y;
+        this.powerUniform[0]     = this.light.power;
+        
+        this.device.queue.writeBuffer(this.lightUniform, 0, this.lightUniformValues);
     }
 
     generateRandoms() {

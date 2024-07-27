@@ -1,6 +1,9 @@
-class AccumulatePass {
-    constructor(device, raysRenderTexture, frameCounterBuffer) {
+import { shaderAccumulate } from "../shaders/shaders.js";
+
+export class AccumulatePass {
+    constructor(device, settings, raysRenderTexture, frameCounterBuffer) {
         this.device = device;
+        this.settings = settings;
         this.raysRenderTexture = raysRenderTexture;
         this.frameCounterBuffer = frameCounterBuffer
         this.setup();
@@ -27,7 +30,7 @@ class AccumulatePass {
             fragment: {
                 module: module,
                 targets: [{
-                    format: highPrecisionFormat,
+                    format: this.settings.highPrecisionFormat,
                 }],
             },
             primitive: {
@@ -51,15 +54,15 @@ class AccumulatePass {
 
         this.lastAccumulateTexture = this.device.createTexture({
             label: "Last average texture",
-            size: resolution,
-            format: highPrecisionFormat,
+            size: this.settings.resolution,
+            format: this.settings.highPrecisionFormat,
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
 
         this.newAccumulateRenderTexture = this.device.createTexture({
             label: "New average render texture",
-            size: resolution,
-            format: highPrecisionFormat,
+            size: this.settings.resolution,
+            format: this.settings.highPrecisionFormat,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
         });
 
@@ -85,12 +88,11 @@ class AccumulatePass {
             label: 'Accumulate renderpass',
             colorAttachments: [{
                 view: this.newAccumulateRenderTexture.createView(),
-                clearValue: [1.0, 0.0, 0.0, 1.0],
+                clearValue: [0.0, 0.0, 0.0, 1.0],
                 loadOp: 'clear',
                 storeOp: 'store',
             },],
         };
-
     }
     
     run() {
@@ -107,10 +109,24 @@ class AccumulatePass {
         copyEncoder.copyTextureToTexture(
             {texture: this.newAccumulateRenderTexture}, 
             {texture: this.lastAccumulateTexture}, 
-            resolution
+            this.settings.resolution
         );
         const copyCommandBuffer = copyEncoder.finish();
         
         this.device.queue.submit([commandBuffer, copyCommandBuffer]);
+    }
+
+    reset() {
+        // TODO This is clearing it the slow way
+        const data = new Float32Array(this.settings.resolution[0] * this.settings.resolution[1] * 4);
+        this.device.queue.writeTexture(
+            { texture: this.lastAccumulateTexture }, 
+            data, 
+            { bytesPerRow: this.settings.resolution[0] * 4 * 4}, 
+            { 
+                width: this.settings.resolution[0], 
+                height: this.settings.resolution[1] 
+            }
+        );
     }
 }

@@ -1,21 +1,14 @@
-const LightType = {
-    POINT : 0
+export const LightType = {
+    POINT : 0,
+    BEAM  : 1,
+    LASER : 2,
 }
 
-class Light {
-    constructor(type, position, power) {
+export class Light {
+    constructor(type, position, direction, power) {
         this.type = type;
         this.position = position;
+        this.direction = direction.normalize();
         this.power = power;
-    }
-
-    createRay() {
-        switch(this.type) {
-            case LightType.POINT:
-                var angle = Math.random() * Math.PI * 2.0;
-                var x = Math.cos(angle);
-                var y = Math.sin(angle);
-                return new Vector2(x, y);
-        }
     }
 }

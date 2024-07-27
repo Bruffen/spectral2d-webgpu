@@ -1,8 +1,10 @@
-class BlitPass {
-    constructor(device, newAccumulateRenderTexture, canvasTexture) {
+import { shaderBlit } from "../shaders/shaders.js";
+
+export class BlitPass {
+    constructor(device, settings, newAccumulateRenderTexture) {
         this.device = device;
+        this.settings = settings;
         this.newAccumulateRenderTexture = newAccumulateRenderTexture;
-        this.canvasTexture = canvasTexture;
         this.setup();
     }
 
@@ -27,7 +29,7 @@ class BlitPass {
             fragment: {
                 module: module,
                 targets: [{
-                    format: lowPrecisionFormat,
+                    format: this.settings.lowPrecisionFormat,
                 }],
             },
             primitive: {
@@ -91,5 +93,9 @@ class BlitPass {
         const commandBuffer = encoder.finish();
 
         this.device.queue.submit([commandBuffer]);
+    }
+
+    reset() {
+        
     }
 }

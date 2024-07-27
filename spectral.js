@@ -1,12 +1,24 @@
-class Spectral {
-    constructor(device, context) {
+import { Vector2 } from "./vector.js"; 
+import { Light, LightType } from "./light.js";
+
+import { TracePass } from "./passes/trace.js";
+import { RenderPass } from "./passes/render.js";
+import { AccumulatePass } from "./passes/accumulate.js";
+import { BlitPass } from "./passes/blit.js";
+
+export class Spectral {
+    constructor(device, context, settings) {
         this.device = device;
         this.context = context;
+        this.settings = settings;
 
-        this.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), 100.0);
+        this.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 100.0);
+        //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 100.0);
+        //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 100.0);
         this.rayAmount = 15000;
         this.rayDepth = 6;
         this.frameCounter = 1;
+        this.isDone = false;
 
         this.setup();
     }
@@ -14,7 +26,7 @@ class Spectral {
     setup() {
         this.context.configure({
             device: this.device,
-            format: lowPrecisionFormat,
+            format: this.settings.lowPrecisionFormat,
             //alphaMode: 'premultiplied',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT, 
         });
@@ -34,7 +46,8 @@ class Spectral {
         );
         
         this.renderPass = new RenderPass(
-            this.device, 
+            this.device,
+            this.settings,
             this.tracePass.verticesPerRay, 
             this.rayAmount, 
             this.rayDepth,
@@ -44,12 +57,14 @@ class Spectral {
         
         this.accumPass = new AccumulatePass(
             this.device,
+            this.settings,
             this.renderPass.raysRenderTexture, 
             this.frameCounterBuffer
         );
         
         this.blitPass = new BlitPass(
             this.device, 
+            this.settings,
             this.accumPass.newAccumulateRenderTexture
         );
     }
@@ -58,7 +73,6 @@ class Spectral {
         this.tracePass.run();
         this.renderPass.run();
         this.accumPass.run();
-        
         
         // Only copies between same texture formats are allowed, so we are limited to 16 bit floats.
         /*
@@ -86,7 +100,23 @@ class Spectral {
         }
         else {
             console.log("Rendering over");
+            this.isDone = true;
             //this.saveRender();
+        }
+    }
+
+    reset() {
+        this.frameCounter = 1;
+        this.device.queue.writeBuffer(this.frameCounterBuffer, 0, new Uint32Array([this.frameCounter]));
+        
+        this.tracePass.reset(this.light);
+        this.renderPass.reset();
+        this.accumPass.reset();
+        this.blitPass.reset();
+
+        if (this.isDone) {
+            this.isDone = false;
+            this.render();
         }
     }
 

@@ -6,10 +6,15 @@
 - ~~Make light uniform work;~~
 - Make common screen quad vertex shader;
 - Do bounds collision;
-- ~~Do sphere intersection.~~
-- Do triangle intersection.
-- Make light move to mouse click position
-- Implement other types of lights
+- ~~Do sphere intersection;~~
+- Do triangle intersection;
+- Make mouse click interaction:
+  - ~~Light move to position;~~
+  - Light point in direction of mouse drag.
+- ~~Implement other types of lights.~~
 
 ### Ideas
 - In order to avoid requiring float32-filterable, try using a compute shader.
+
+### Bugs
+- Sphere intersection has weird results when light position is inside of sphere;
