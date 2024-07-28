@@ -52,6 +52,7 @@ async function start() {
     Object.assign(gui.domElement.style, {right: '15px', left: ''});
     
     gui.addLabel('Light:');
+    gui.addLabel('Position \t Click on the screen to move the light!');
     gui.add(dataGUI, 'Type', {keyValues: {'Point': LightType.POINT, 'Beam': LightType.BEAM, 'Laser': LightType.LASER}});
 
     /*const observer = new ResizeObserver(entries => {
@@ -75,16 +76,16 @@ async function start() {
     function update() {
         switch(dataGUI['Type']) {
             case LightType.POINT:
-                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 100.0);
+                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 50.0);
                 break;
             case LightType.BEAM:
-                spectral.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 100.0);
+                spectral.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 50.0);
                 break;
             case LightType.LASER:
-                spectral.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 100.0);
+                spectral.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 50.0);
                 break;
             default:
-                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 100.0);
+                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 50.0);
             break;
         }
 

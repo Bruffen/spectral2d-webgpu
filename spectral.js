@@ -13,9 +13,9 @@ export class Spectral {
         this.context = canvas.getContext('webgpu');
         this.settings = settings;
 
-        this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(0.0, 0.0), 100.0);
-        //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 100.0);
-        //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 100.0);
+        this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(0.0, 0.0), 50.0);
+        //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 50.0);
+        //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 50.0);
         this.rayAmount = 10000;
         this.rayDepth = 6;
         this.frameCounter = 1;

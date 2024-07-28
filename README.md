@@ -14,7 +14,12 @@
   - Light point in direction of mouse drag.
 - ~~Implement other types of lights;~~
 - Make objects in scene easier to iterate;
-- Implement full spectrum of light
+- Implement full spectrum of light;
+- Implement materials:
+  - ~~Glass;~~
+  - ~~Lambertian diffuse;~~
+  - Metal;
+  - Mirror.
 
 ### Bugs
 - ~~Sphere intersection has weird results when light position is inside of sphere;~~
