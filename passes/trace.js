@@ -68,11 +68,9 @@ export class TracePass {
         
         const lightUniformSize = 
             1 * 4 + // type u32
-            1 * 4 + // padding
-            2 * 4 + // position vec2f
-            2 * 4 + // direction vec2f
             1 * 4 + // power f32
-            1 * 4;  // padding
+            2 * 4 + // position vec2f
+            2 * 4;  // direction vec2f
 
         this.lightUniform = this.device.createBuffer({
             label: 'Light uniform',
@@ -82,9 +80,9 @@ export class TracePass {
         
         this.lightUniformValues = new ArrayBuffer(lightUniformSize);
         this.timeUniform      = new Uint32Array (this.lightUniformValues, 0, 1);
+        this.powerUniform     = new Float32Array(this.lightUniformValues, 4, 1);
         this.positionUniform  = new Float32Array(this.lightUniformValues, 8, 2);
         this.directionUniform = new Float32Array(this.lightUniformValues, 16, 2);
-        this.powerUniform     = new Float32Array(this.lightUniformValues, 24, 1);
         
         this.updateLightUniform();
 
@@ -134,11 +132,11 @@ export class TracePass {
 
     updateLightUniform() {
         this.timeUniform[0]      = this.light.type;
+        this.powerUniform[0]     = this.light.power;
         this.positionUniform[0]  = this.light.position.x;
         this.positionUniform[1]  = this.light.position.y;
         this.directionUniform[0] = this.light.direction.x;
         this.directionUniform[1] = this.light.direction.y;
-        this.powerUniform[0]     = this.light.power;
         
         this.device.queue.writeBuffer(this.lightUniform, 0, this.lightUniformValues);
     }

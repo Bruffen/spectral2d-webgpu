@@ -3,24 +3,16 @@ struct VSOutput {
     @location(0) color: vec4f,
 };
 
-struct Vertex {
-    position: vec2f,
-};
-
-struct Color {
-    color: vec4f,
-};
-
-@group(0) @binding(0) var<storage, read> positions: array<Vertex>;
-@group(0) @binding(1) var<storage, read> colors: array<Color>;
+@group(0) @binding(0) var<storage, read> positions: array<vec2f>;
+@group(0) @binding(1) var<storage, read> colors: array<vec4f>;
 
 @vertex fn vs(
     @builtin(vertex_index) vertexIndex : u32,
     @builtin(instance_index) instanceIndex: u32
 ) -> VSOutput {
     var vsOut: VSOutput;
-    vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2].position, 0.0, 1.0);
-    vsOut.color = colors[instanceIndex].color;
+    vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2], 0.0, 1.0);
+    vsOut.color = colors[instanceIndex];
     return vsOut;
 }
 

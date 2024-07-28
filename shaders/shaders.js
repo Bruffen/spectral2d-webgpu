@@ -5,24 +5,16 @@ struct VSOutput {
     @location(0) color: vec4f,
 };
 
-struct Vertex {
-    position: vec2f,
-};
-
-struct Color {
-    color: vec4f,
-};
-
-@group(0) @binding(0) var<storage, read> positions: array<Vertex>;
-@group(0) @binding(1) var<storage, read> colors: array<Color>;
+@group(0) @binding(0) var<storage, read> positions: array<vec2f>;
+@group(0) @binding(1) var<storage, read> colors: array<vec4f>;
 
 @vertex fn vs(
     @builtin(vertex_index) vertexIndex : u32,
     @builtin(instance_index) instanceIndex: u32
 ) -> VSOutput {
     var vsOut: VSOutput;
-    vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2].position, 0.0, 1.0);
-    vsOut.color = colors[instanceIndex].color;
+    vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2], 0.0, 1.0);
+    vsOut.color = colors[instanceIndex];
     return vsOut;
 }
 
@@ -101,22 +93,27 @@ struct VSOutput {
 export const shaderTrace =
 `
 struct Light {
-    t: u32,
-    position: vec2f,
-    direction: vec2f,
-    power: f32,
+    t         : u32,
+    power     : f32,
+    position  : vec2f,
+    direction : vec2f,
 };
 
 struct Ray {
-    origin: vec2f,
-    direction: vec2f,
+    origin    : vec2f,
+    direction : vec2f,
 };
 
 struct RayHit {
-    t : f32,
-    position : vec2f,
-    normal : vec2f,
+    t         : f32,
+    material  : u32, // 0 for glass, 1 for lambertian diffuse
+    normal    : vec2f,
 };
+
+struct Object {
+    center    : vec2f,
+    data      : vec4f,
+}
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2f>;
 @group(0) @binding(1) var<storage, read_write> colors:    array<vec4f>;
@@ -125,13 +122,15 @@ struct RayHit {
 @group(0) @binding(4) var<uniform> rayDepth  : i32;
 @group(0) @binding(5) var<uniform> light: Light;
 
-fn intersect_box(origin : vec2f, direction : vec2f) -> vec2f {
+fn intersect_box(origin : vec2f, direction : vec2f) -> RayHit {
     var tmin  : f32;
     var tmax  : f32;
     var tymin : f32;
     var tymax : f32;
     var bounds_min = vec2f(-1.0, -1.0);
-    var bounds_max = vec2f(-0.9, -0.9);
+    var bounds_max = vec2f( 1.0,  1.0);
+
+    var hit : RayHit;
 
     var invdir = 1.0 / direction; 
     if (invdir.x >= 0) { 
@@ -153,7 +152,8 @@ fn intersect_box(origin : vec2f, direction : vec2f) -> vec2f {
     }
     
     if ((tmin > tymax) || (tymin > tmax)) {
-        return vec2f(1000000, 0);
+        hit.t = -1.0;
+        return hit;
     }
 
     if (tymin > tmin) {
@@ -164,26 +164,44 @@ fn intersect_box(origin : vec2f, direction : vec2f) -> vec2f {
     }
 
     if (tmin < 0.0) {
-        return vec2f(1000000, 0);
+        hit.t = -1.0;
+        return hit;
     }
 
-    var t = min(max(tmin, 0.0), tmax);
+    hit.t = min(max(tmin, 0.0), tmax);
+    
+    hit.material = 0;
+    hit.normal = vec2f(0.0, -1.0); //todo
 
-    return vec2f(t, 1.0);
+    return hit;
+}
+
+fn intersect_line(origin :vec2f, direction : vec2f, center : vec2f, normal : vec2f, m : u32) -> RayHit {
+    var hit : RayHit;
+
+    var denom = dot(-normal, direction);
+    if (denom > 0.00001) {
+        var co = center - origin;
+        hit.t = dot(co, -normal) / denom;
+    }
+
+    hit.material = m;
+    hit.normal = normal;
+    return hit;
 }
 
 fn intersect_circle(origin : vec2f, direction : vec2f) -> RayHit {
-    var center = vec2f(-0.5, 0.5);
+    var center = vec2f(-0.1, -0.1);
     var radius = 0.2;
     
     var hit : RayHit;
 
     var oc = origin - center;
-    // aleady normalized therefore length is 1
-    var a = 1.0; //direction.x * direction.x + direction.y * direction.y; 
+    // a is already normalized therefore length is 1
+    //var a = direction.x * direction.x + direction.y * direction.y; 
     var h = dot(oc, direction);
     var c = oc.x * oc.x + oc.y * oc.y - radius * radius;
-    var discriminant = h * h - a * c;
+    var discriminant = h * h - /*a **/ c;
 
     var sqrtd = sqrt(discriminant);
     var root = (-h - sqrtd);// / a;
@@ -197,8 +215,9 @@ fn intersect_circle(origin : vec2f, direction : vec2f) -> RayHit {
     }
 
     hit.t = root;
-    hit.position = origin + direction * hit.t;
-    hit.normal = (hit.position - center) / radius;
+    var position = origin + direction * hit.t;
+    hit.normal = (position - center) / radius;
+    hit.material = 0;
 
     return hit;
 }
@@ -237,6 +256,101 @@ fn generateFromLight(random : f32) -> Ray {
     return ray;
 }
 
+fn materialGlass(ray : Ray, hit : RayHit, random : f32) -> vec2f {
+    var scattered : vec2f;
+    
+    var index_refraction = 0.657;
+    var normal = hit.normal;
+
+    if (dot(ray.direction, normal) > 0.0) {
+        normal = -normal;
+        index_refraction = 1.0 / index_refraction;
+    }
+
+    var cos_theta = min(dot(-ray.direction, normal), 1.0);
+    var sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+    var cannot_refract = index_refraction * sin_theta > 1.0;
+
+    if (cannot_refract || reflectance(cos_theta, index_refraction) > random) {
+        scattered = reflect(ray.direction, normal);
+    } else {
+        scattered = refract(ray.direction, normal, index_refraction);
+    }
+
+    return scattered;
+}
+
+fn materialLambert(ray : Ray, hit : RayHit, random : f32) -> vec2f {
+    var scattered : vec2f;
+
+    let M_PI = 3.1415926535897932384626433832795;
+
+    let angle = random * M_PI;
+    var direction = vec2f(cos(angle), sin(angle));
+
+    var transform : mat2x2f;
+
+    if (hit.normal.y < -0.5) {
+        transform = mat2x2f(vec2f(-1.0, 0.0), vec2f(0.0, -1.0));
+    }
+    if (hit.normal.y > 0.5) {
+        transform = mat2x2f(vec2f(1.0, 0.0), vec2f(0.0, 1.0));
+    }
+    if (hit.normal.x < -0.5) {
+        transform = mat2x2f(vec2f(0.0, 1.0), vec2f(-1.0, 0.0));
+    }
+    if (hit.normal.x > 0.5) {
+        transform = mat2x2f(vec2f(0.0, -1.0), vec2f(1.0, 0.0));
+    }
+
+    scattered = transform * direction;
+    return scattered;
+}
+
+fn scatter(ray : Ray, hit : RayHit, random : f32) -> vec2f {
+    var scattered : vec2f;
+
+    switch hit.material {
+        case 0: {
+            scattered = materialGlass(ray, hit, random);
+        }
+        case 1, default: {
+            scattered = materialLambert(ray, hit, random);
+        }
+    }
+
+    return scattered;
+}
+
+fn scene(ray : Ray) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    var lines = array<vec4f, 4>(
+        vec4f(0.0, 1.0, 0.0, -1.0),
+        vec4f(0.0, -1.0, 0.0, 1.0),
+        vec4f(1.0, 0.0, -1.0, 0.0),
+        vec4f(-1.0, 0.0, 1.0, 0.0)
+    );
+
+    for (var i = 0; i < 4; i++) {
+        tmp = intersect_line(ray.origin, ray.direction, lines[i].xy, lines[i].zw, 1);
+        if (tmp.t > 0.0 && tmp.t < hit.t) {
+            hit = tmp;
+        }
+    }
+
+    tmp = intersect_circle(ray.origin, ray.direction);
+    if (tmp.t > 0.0 && tmp.t < hit.t) {
+        hit = tmp;
+    }
+
+    return hit;
+}
+
 @compute @workgroup_size(64) fn trace(@builtin(global_invocation_id) id: vec3u) {
     let i = i32(id.x);
 
@@ -246,7 +360,8 @@ fn generateFromLight(random : f32) -> Ray {
     var ray = generateFromLight(randoms[i * randomDepth]);
 
     for (var depth = 0; depth < rayDepth; depth++) {
-        var hit = intersect_circle(ray.origin, ray.direction);
+        var hit = scene(ray);
+        
         if (hit.t > 0.0) {
             length = hit.t;
         }
@@ -259,26 +374,10 @@ fn generateFromLight(random : f32) -> Ray {
         let brightness = light.power * aliasing * (1.0 / f32(rayAmount));
         colors[i * rayDepth + depth] = vec4f(1.0, 1.0, 1.0, brightness);
 
+        let r = randoms[i * randomDepth + depth + 1];
+        
         if (hit.t > 0.0) {
-            var index_refraction = 0.657;
-
-            if (dot(ray.direction, hit.normal) > 0.0) {
-                hit.normal = -hit.normal;
-                index_refraction = 1.0 / index_refraction;
-            }
-
-            let r = randoms[i * randomDepth + depth + 1];
-
-            var cos_theta = min(dot(-ray.direction, hit.normal), 1.0);
-            var sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-
-            var cannot_refract = index_refraction * sin_theta > 1.0;
-
-            if (cannot_refract || reflectance(cos_theta, index_refraction) > r) {
-                ray.direction = reflect(ray.direction, hit.normal);
-            } else {
-                ray.direction = refract(ray.direction, hit.normal, index_refraction);
-            }
+            ray.direction = scatter(ray, hit, r);
         }
         ray.origin = ray.origin + step + ray.direction * 0.00001;
 

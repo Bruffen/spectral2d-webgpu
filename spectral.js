@@ -7,15 +7,16 @@ import { AccumulatePass } from "./passes/accumulate.js";
 import { BlitPass } from "./passes/blit.js";
 
 export class Spectral {
-    constructor(device, context, settings) {
+    constructor(device, canvas, settings) {
         this.device = device;
-        this.context = context;
+        this.canvas = canvas
+        this.context = canvas.getContext('webgpu');
         this.settings = settings;
 
-        this.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 100.0);
+        this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(0.0, 0.0), 100.0);
         //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 100.0);
         //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 100.0);
-        this.rayAmount = 15000;
+        this.rayAmount = 10000;
         this.rayDepth = 6;
         this.frameCounter = 1;
         this.isDone = false;
@@ -121,7 +122,7 @@ export class Spectral {
     }
 
     saveRender() {
-        var image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+        var image = this.canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
         let xhr = new XMLHttpRequest();
         xhr.responseType = 'blob';
         xhr.onload = function () {

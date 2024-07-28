@@ -41,12 +41,11 @@ async function start() {
         }
     });
 
-    const context = canvas.getContext('webgpu');
     const dataGUI = {
         Type: LightType.POINT,
     };
 
-    const spectral = new Spectral(device, context, settings, dataGUI);
+    const spectral = new Spectral(device, canvas, settings);
 
     const gui = new GUI();
     gui.onChange(/*function() { spectral.reset(dataGUI) }*/ update);
