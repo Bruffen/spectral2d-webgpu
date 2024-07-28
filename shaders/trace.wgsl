@@ -76,35 +76,37 @@ fn intersect_circle(origin : vec2f, direction : vec2f) -> RayHit {
     
     var hit : RayHit;
 
-    var oc = center - origin;
-    var a = direction.x * direction.x + direction.y * direction.y;
-    var h = dot(direction, oc);
+    var oc = origin - center;
+    // aleady normalized therefore length is 1
+    var a = 1.0; //direction.x * direction.x + direction.y * direction.y; 
+    var h = dot(oc, direction);
     var c = oc.x * oc.x + oc.y * oc.y - radius * radius;
     var discriminant = h * h - a * c;
 
     var sqrtd = sqrt(discriminant);
-    var root = (h - sqrtd) / a;
+    var root = (-h - sqrtd);// / a;
 
     if (root < 0.0 || root > 1000000) {
-        root = (h + sqrtd) / a;
+        root = (-h + sqrtd);// / a;
+        if (root < 0.0 || root > 1000000) {
+            hit.t = -1.0;
+            return hit;
+        }
     }
 
-    if (root < 0.0 || root > 1000000) {
-        hit.t = -1.0;
-    } else {
-        hit.t = root;
-        hit.position = origin + direction * hit.t;
-        hit.normal = (hit.position - center) / radius;
-    }
+    hit.t = root;
+    hit.position = origin + direction * hit.t;
+    hit.normal = (hit.position - center) / radius;
 
     return hit;
 }
 
 fn reflectance(cosine : f32, refraction_index : f32) -> f32 {
     // Use Schlick's approximation for reflectance.
-    var r0 = (1 - refraction_index) / (1 + refraction_index);
-    r0 = r0 * r0;
-    return r0 + (1 - r0) * pow((1 - cosine), 5);
+    //var r0 = (1.0 - refraction_index) / (1.0 + refraction_index);
+    //r0 = r0 * r0;
+    var r0 = 0.04257999496; // hardcoded value for air to and from glass
+    return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
 }
 
 fn generateFromLight(random : f32) -> Ray {
@@ -138,10 +140,10 @@ fn generateFromLight(random : f32) -> Ray {
 
     var length = 10.0;
 
-    var ray = generateFromLight(randoms[i * rayDepth]);
+    var randomDepth = rayDepth + 1;
+    var ray = generateFromLight(randoms[i * randomDepth]);
 
     for (var depth = 0; depth < rayDepth; depth++) {
-        
         var hit = intersect_circle(ray.origin, ray.direction);
         if (hit.t > 0.0) {
             length = hit.t;
@@ -163,12 +165,12 @@ fn generateFromLight(random : f32) -> Ray {
                 index_refraction = 1.0 / index_refraction;
             }
 
-            let r = randoms[i * rayDepth + depth];
+            let r = randoms[i * randomDepth + depth + 1];
 
             var cos_theta = min(dot(-ray.direction, hit.normal), 1.0);
             var sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 
-            var cannot_refract = index_refraction * sin_theta > 1.0; // is this really needed?
+            var cannot_refract = index_refraction * sin_theta > 1.0;
 
             if (cannot_refract || reflectance(cos_theta, index_refraction) > r) {
                 ray.direction = reflect(ray.direction, hit.normal);

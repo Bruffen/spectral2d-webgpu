@@ -31,7 +31,7 @@ export class TracePass {
         this.randomUnitSize = 1 * 4;
         const vertexStorageBufferSize = this.vertexUnitSize * this.verticesPerRay * this.rayAmount * this.rayDepth;
         const colorStorageBufferSize  = this.colorUnitSize  * this.rayAmount * this.rayDepth;
-        const randomStorageBufferSize = this.randomUnitSize * this.rayAmount * this.rayDepth;
+        const randomStorageBufferSize = this.randomUnitSize * this.rayAmount * (1 + this.rayDepth);
         this.verticesArray = new Float32Array(vertexStorageBufferSize / 4);
         this.colorsArray   = new Float32Array(colorStorageBufferSize  / 4);
         this.randomsArray  = new Float32Array(randomStorageBufferSize / 4);
@@ -143,8 +143,9 @@ export class TracePass {
         this.device.queue.writeBuffer(this.lightUniform, 0, this.lightUniformValues);
     }
 
+    // Generate randoms for initial directions + scatter directions
     generateRandoms() {
-        for (let i = 0; i < this.rayAmount * this.rayDepth; ++i) {
+        for (let i = 0; i < this.rayAmount * (1 + this.rayDepth); ++i) {
             const offset = i * (this.randomUnitSize / 4);
             this.randomsArray.set([Math.random()], offset);
         }
