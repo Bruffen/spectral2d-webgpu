@@ -92,20 +92,47 @@ async function start() {
         spectral.reset();
     }
 
+    var isMouseDown = false;
+    var clickX, clickY;
+
     function setLightPosition(canvas, event) {
         const rect = canvas.getBoundingClientRect()
-        const x = event.clientX - rect.left
-        const y = event.clientY - rect.top
+        clickX = event.clientX - rect.left;
+        clickY = event.clientY - rect.top;
 
-        const xndc = x / settings.resolution[0] * 2.0 - 1.0;
-        const yndc = (1.0 - (y / settings.resolution[1])) * 2.0 - 1.0;
+        const xndc = clickX / settings.resolution[0] * 2.0 - 1.0;
+        const yndc = (1.0 - (clickY / settings.resolution[1])) * 2.0 - 1.0;
 
         spectral.light.position = new Vector2(xndc , yndc);
         spectral.reset();
     }
+
+    function setLightDirection(canvas, event) {
+        const rect = canvas.getBoundingClientRect()
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        spectral.light.direction = new Vector2(x - clickX, clickY - y).normalize();
+        spectral.reset();
+    }
     
     canvas.addEventListener('mousedown', function(e) {
+        isMouseDown = true;
         setLightPosition(canvas, e)
+    })
+    
+    canvas.addEventListener('mouseup', function() {
+        isMouseDown = false;
+    })
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (isMouseDown) {
+            if (spectral.light.type == LightType.BEAM || spectral.light.type == LightType.LASER) {
+                setLightDirection(canvas, e);
+            } else {
+                setLightPosition(canvas, e);
+            }
+        }
     })
 }
 
