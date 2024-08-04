@@ -1,8 +1,8 @@
 import GUI from 'https://webgpufundamentals.org/3rdparty/muigui-0.x.module.js'
-import { Spectral } from './spectral.js'
-import { Settings } from './settings.js';
-import { Light, LightType } from './light.js';
-import { Vector2 } from './vector.js';
+import { Spectral } from './renderer/spectral.js'
+import { Settings } from './renderer/settings.js';
+import { Light, LightType } from './renderer/light.js';
+import { Vector2 } from './renderer/vector.js';
 
 async function start() {
     const canvas = document.querySelector('#c');
@@ -76,16 +76,16 @@ async function start() {
     function update() {
         switch(dataGUI['Type']) {
             case LightType.POINT:
-                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 50.0);
+                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), spectral.lightPower);
                 break;
             case LightType.BEAM:
-                spectral.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), 50.0);
+                spectral.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), spectral.lightPower);
                 break;
             case LightType.LASER:
-                spectral.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), 50.0);
+                spectral.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), spectral.lightPower);
                 break;
             default:
-                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), 50.0);
+                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), spectral.lightPower);
             break;
         }
 
