@@ -1,27 +1,7 @@
-struct Vertex {
-    @location(0) position: vec2f,
-};
+@group(0) @binding(0) var i: texture_storage_2d<rgba32float, read>;
+@group(0) @binding(1) var o: texture_storage_2d<rgba16float, write>;
 
-struct VSOutput {
-    @builtin(position) position: vec4f,
-    @location(0) uv: vec2f,
-};
-
-// TODO create single vertex shader for quad passes
-@vertex fn vs(vert: Vertex) -> VSOutput {
-    var o : VSOutput;
-    o.position = vec4f(vert.position, 0.0, 1.0);
-
-    // Convert top left corner from (-1, 1) in NDC to (0, 0) texture coordinates
-    o.uv = vert.position;
-    o.uv.x = (o.uv.x + 1.0) * 0.5;
-    o.uv.y = (1.0 - o.uv.y) * 0.5;
-    return o;
-}
-
-@group(0) @binding(0) var nsampler: sampler;
-@group(0) @binding(1) var outputtex: texture_2d<f32>;
-
-@fragment fn fs(i: VSOutput) -> @location(0) vec4f {
-    return pow(textureSample(outputtex, nsampler, i.uv), vec4(1.0/2.2));
+@compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) id: vec3u) {
+    var color = textureLoad(i, id.xy);
+    textureStore(o, id.xy, pow(color, vec4f(1.0/2.2)));
 }

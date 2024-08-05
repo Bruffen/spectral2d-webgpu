@@ -17,7 +17,7 @@ export class RenderPass {
             label: "Rays render texture",
             size: this.settings.resolution,
             format: this.settings.lowPrecisionFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.STORAGE_BINDING,
         });
 
         const module = this.device.createShaderModule({

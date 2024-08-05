@@ -23,15 +23,15 @@ async function start() {
         alert('This browser supports webgpu but it appears disabled.');
         return;
     }
-
+/*
     const canUseFloat32Filterable = adapter?.features.has('float32-filterable');
     if (!canUseFloat32Filterable) {
         alert('Sorry, your device doesn\'t support float32-filterable feature.');
         return;
     }
-
+*/
     const device = await adapter?.requestDevice({
-        requiredFeatures: [ 'float32-filterable' ],
+        //requiredFeatures: [ 'float32-filterable' ],
     });
 
     device.lost.then((info) => {

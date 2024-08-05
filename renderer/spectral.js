@@ -18,10 +18,11 @@ export class Spectral {
         //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), this.lightPower);
         //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), this.lightPower);
         this.rayAmount = 10000;
-        this.rayDepth = 10;
+        this.rayDepth = 11;
         this.frameCounter = 1;
         this.isDone = false;
 
+        this.iterationsMax = 2000;
         this.setup();
     }
     
@@ -30,7 +31,7 @@ export class Spectral {
             device: this.device,
             format: this.settings.lowPrecisionFormat,
             //alphaMode: 'premultiplied',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT, 
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
         });
 
         this.frameCounterBuffer = this.device.createBuffer({
@@ -97,11 +98,11 @@ export class Spectral {
         this.frameCounter++;
         this.device.queue.writeBuffer(this.frameCounterBuffer, 0, new Uint32Array([this.frameCounter]));
     
-        if (this.frameCounter < 1000) {
+        if (this.frameCounter < this.iterationsMax) {
             requestAnimationFrame(() => this.render());
         }
         else {
-            console.log("Rendering over");
+            console.log("Rendering over. " + this.rayAmount * this.rayDepth * this.iterationsMax + " rays traced.");
             this.isDone = true;
             //this.saveRender();
         }
