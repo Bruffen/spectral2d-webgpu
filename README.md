@@ -31,6 +31,7 @@
 - Need to divide energy by pdf?
 - ~~If alpha is over one, it will be opaque instead of blending;~~
 - If light intensity is multiplied after rgb conversion, some colors will disappear;
+- Mobile devices have anti-aliasing already;
 
 ### Ideas
 ~~- In order to avoid requiring float32-filterable, try using a compute shader;~~

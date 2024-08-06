@@ -101,6 +101,11 @@ struct Object {
 @group(0) @binding(6) var<uniform> rayDepth:   i32;
 @group(0) @binding(7) var<uniform> light: Light;
 
+// Fix undefined behaviour of sqrt of negative zero/value for mobile
+fn sqrt_positive(value : f32) -> f32 {
+    return sqrt(max(0.0, value));
+}
+
 fn cie_to_rgb(wavelength : f32) -> vec3f {
     let w = min(max(wavelength, 390.0), 830.0);
     let i = i32((floor(w) - 390));
@@ -161,7 +166,7 @@ fn intersect_circle(ray : Ray, center : vec2f, radius : f32, material : u32) -> 
     var c = oc.x * oc.x + oc.y * oc.y - radius * radius;
     var discriminant = h * h - /*a **/ c;
 
-    var sqrtd = sqrt(discriminant);
+    var sqrtd = sqrt_positive(discriminant);
     var root = (-h - sqrtd);// / a;
 
     if (root < 0.0 || root > 1000000) {
@@ -258,7 +263,7 @@ fn material_glass(ray : Ray, hit : RayHit, random : f32) -> vec2f {
     }
 
     var cos_theta = min(dot(-ray.direction, normal), 1.0);
-    var sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+    var sin_theta = sqrt_positive(1.0 - cos_theta * cos_theta);
 
     var cannot_refract = index_refraction * sin_theta > 1.0;
 
@@ -435,8 +440,8 @@ fn generate_from_light(random : RandomInitials) -> Ray {
         positions[i * 2 * rayDepth + 0 + depth * 2] = ray.origin; // correct for aspect ratio
         positions[i * 2 * rayDepth + 1 + depth * 2] = ray.origin + step;
 
-        let aliasing = sqrt(step.x*step.x + step.y*step.y) / max(abs(step.x), abs(step.y));
-        let brightness = aliasing * (1.0 / f32(rayAmount));
+        let anti_aliasing = sqrt_positive(step.x*step.x + step.y*step.y) / max(abs(step.x), abs(step.y));
+        let brightness = anti_aliasing * (1.0 / f32(rayAmount));
         colors[i * rayDepth + depth] = vec4f(color * ray.energy * brightness, 1.0);
 
         let r = random_scatters[i * rayDepth + depth];
