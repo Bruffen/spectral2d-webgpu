@@ -24,6 +24,7 @@
 - Make a world coordinate system and transformations;
 - Change intersect_triangle to return an array of lines of any object;
 - Implement light colors besides white;
+- Implement transient rendering;
 
 ### Bugs
 - ~~Sphere intersection has weird results when light position is inside of sphere;~~

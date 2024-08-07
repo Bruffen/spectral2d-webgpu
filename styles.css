@@ -1,9 +1,22 @@
 html, body {
     /*margin: 0;       /* remove the default margin          */
     height: 100%;    /* make the html,body fill the page   */
-    background-color: black;
+    background-color: rgb(225, 225, 225);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
+
+select, button {
+    font-family: inherit;
+    border: 0px solid;
+    padding: 10px;
+
+    background-color: #adadad;
+    border-color: #484848;
+}
+
 canvas {
     width:  700px;
     height: 700px;
+    margin: auto;
+    display: block;
 }

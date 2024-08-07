@@ -1,4 +1,3 @@
-import GUI from 'https://webgpufundamentals.org/3rdparty/muigui-0.x.module.js'
 import { Spectral } from './renderer/spectral.js'
 import { Settings } from './renderer/settings.js';
 import { Light, LightType } from './renderer/light.js';
@@ -41,54 +40,8 @@ async function start() {
         }
     });
 
-    const dataGUI = {
-        Type: LightType.POINT,
-    };
-
-    const spectral = new Spectral(device, canvas, settings);
-
-    const gui = new GUI();
-    gui.onChange(/*function() { spectral.reset(dataGUI) }*/ update);
-    Object.assign(gui.domElement.style, {right: '15px', left: ''});
-    
-    gui.addLabel('Light:');
-    gui.addLabel('Position \t Click on the screen to move the light!');
-    gui.add(dataGUI, 'Type', {keyValues: {'Point': LightType.POINT, 'Beam': LightType.BEAM, 'Laser': LightType.LASER}});
-
-    /*const observer = new ResizeObserver(entries => {
-        for (const entry of entries) {
-            const width = entry.devicePixelContentBoxSize?.[0].inlineSize ||
-                entry.contentBoxSize[0].inlineSize * devicePixelRatio;
-            const height = entry.devicePixelContentBoxSize?.[0].blockSize ||
-                entry.contentBoxSize[0].blockSize * devicePixelRatio;
-            const canvas = entry.target;*/
-            canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
-            canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
-        //}
-        spectral.render();
-    //});
-    //try {
-    //    observer.observe(canvas, { box: 'device-pixel-content-box' });
-    //} catch {
-    //    observer.observe(canvas, { box: 'content-box' });
-    //}
-
-    function update() {
-        switch(dataGUI['Type']) {
-            case LightType.POINT:
-                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), spectral.lightPower);
-                break;
-            case LightType.BEAM:
-                spectral.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), spectral.lightPower);
-                break;
-            case LightType.LASER:
-                spectral.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), spectral.lightPower);
-                break;
-            default:
-                spectral.light = new Light(LightType.POINT, new Vector2(0.0, 0.0), new Vector2(0.0, 0.0), spectral.lightPower);
-            break;
-        }
-
+    function setLightType(type) {
+        spectral.light.type = type;
         spectral.reset();
     }
 
@@ -118,12 +71,12 @@ async function start() {
     
     canvas.addEventListener('mousedown', function(e) {
         isMouseDown = true;
-        setLightPosition(canvas, e)
-    })
+        setLightPosition(canvas, e);
+    });
     
     canvas.addEventListener('mouseup', function() {
         isMouseDown = false;
-    })
+    });
 
     canvas.addEventListener('mousemove', function(e) {
         if (isMouseDown) {
@@ -133,7 +86,62 @@ async function start() {
                 setLightPosition(canvas, e);
             }
         }
-    })
+    });
+
+    /**
+     * Light type
+     */
+    const dropdownLight = document.getElementById("dropdownLight");
+    dropdownLight.onchange = () => dropdownLightOnChange();
+    for (var lt in LightType) {
+        let o = document.createElement("option");
+        o.innerText = lt;
+        dropdownLight.appendChild(o);
+    }
+
+    function dropdownLightOnChange() {
+        setLightType(dropdownLight.selectedIndex);
+    }
+
+    /**
+     * Render save
+     */
+    const btnSaveRender = document.getElementById("btnSave");
+    btnSaveRender.addEventListener("click", () => spectral.saveRender());
+    btnSaveRender.innerText = "Save image";
+
+    /**
+     * Rays progress
+     */
+    const textProgress = document.getElementById("textProgress");
+
+    function progressUpdate() {
+        let raysTraced = spectral.rayAmount * spectral.frameCounter;
+        let raysTotal  = spectral.rayAmount * spectral.iterationsMax;
+        let percentage = raysTraced / raysTotal * 100.0;
+        textProgress.innerText = raysTraced + " rays traced: " + percentage.toFixed(0) + "%.";
+    }
+    
+    const spectral = new Spectral(device, canvas, settings, () => progressUpdate());
+
+    /*const observer = new ResizeObserver(entries => {
+        for (const entry of entries) {
+            const width = entry.devicePixelContentBoxSize?.[0].inlineSize ||
+                entry.contentBoxSize[0].inlineSize * devicePixelRatio;
+            const height = entry.devicePixelContentBoxSize?.[0].blockSize ||
+                entry.contentBoxSize[0].blockSize * devicePixelRatio;
+            const canvas = entry.target;*/
+            canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
+            canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
+        //}
+        spectral.render();
+    //});
+    //try {
+    //    observer.observe(canvas, { box: 'device-pixel-content-box' });
+    //} catch {
+    //    observer.observe(canvas, { box: 'content-box' });
+    //}
+
 }
 
 

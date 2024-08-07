@@ -7,22 +7,23 @@ import { AccumulatePass } from "./passes/accumulate.js";
 import { BlitPass } from "./passes/blit.js";
 
 export class Spectral {
-    constructor(device, canvas, settings) {
+    constructor(device, canvas, settings, progressCallback) {
         this.device = device;
         this.canvas = canvas
         this.context = canvas.getContext('webgpu');
         this.settings = settings;
+        this.progressCallback = progressCallback;
 
         this.lightPower = 250;
-        this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(0.0, 0.0), this.lightPower);
-        //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.0), this.lightPower);
-        //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(-1.0, 1.2), this.lightPower);
-        this.rayAmount = 10000;
+        this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(1.0, 0.0), this.lightPower);
+        //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(1.0, 0.0), this.lightPower);
+        //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(1.0, 0.0), this.lightPower);
+        this.rayAmount = 15000;
         this.rayDepth = 11;
         this.frameCounter = 1;
         this.isDone = false;
 
-        this.iterationsMax = 2000;
+        this.iterationsMax = 1000;
         this.setup();
     }
     
@@ -97,12 +98,13 @@ export class Spectral {
            
         this.frameCounter++;
         this.device.queue.writeBuffer(this.frameCounterBuffer, 0, new Uint32Array([this.frameCounter]));
+        this.progressCallback();
     
         if (this.frameCounter < this.iterationsMax) {
             requestAnimationFrame(() => this.render());
         }
         else {
-            console.log("Rendering over. " + this.rayAmount * this.rayDepth * this.iterationsMax + " rays traced.");
+            console.log("Rendering over.");
             this.isDone = true;
             //this.saveRender();
         }
