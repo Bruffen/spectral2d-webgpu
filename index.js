@@ -9,6 +9,8 @@ async function start() {
     let style = getComputedStyle(canvas);
     const width = style.width.replace(/[^0-9]/g, '');
     const height = style.height.replace(/[^0-9]/g, '');
+    const aspect = width / height;
+    const invAspect = 1.0 / aspect;
     
     const settings = new Settings(width, height);
 
@@ -40,11 +42,6 @@ async function start() {
         }
     });
 
-    function setLightType(type) {
-        spectral.light.type = type;
-        spectral.reset();
-    }
-
     var isMouseDown = false;
     var clickX, clickY;
 
@@ -53,7 +50,7 @@ async function start() {
         clickX = event.clientX - rect.left;
         clickY = event.clientY - rect.top;
 
-        const xndc = clickX / settings.resolution[0] * 2.0 - 1.0;
+        const xndc = (clickX / settings.resolution[0] * 2.0 - 1.0) * aspect;
         const yndc = (1.0 - (clickY / settings.resolution[1])) * 2.0 - 1.0;
 
         spectral.light.position = new Vector2(xndc , yndc);
@@ -65,7 +62,14 @@ async function start() {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
 
-        spectral.light.direction = new Vector2(x - clickX, clickY - y).normalize();
+        const dirx = x - clickX;
+        const diry = clickY - y;
+
+        if (dirx == 0 && diry == 0) {
+            return;
+        }
+        
+        spectral.light.direction = new Vector2(dirx, diry).normalize();
         spectral.reset();
     }
     
@@ -90,7 +94,7 @@ async function start() {
 
     /**
      * Light type
-     */
+     */    
     const dropdownLight = document.getElementById("dropdownLight");
     dropdownLight.onchange = () => dropdownLightOnChange();
     for (var lt in LightType) {
@@ -98,17 +102,81 @@ async function start() {
         o.innerText = lt;
         dropdownLight.appendChild(o);
     }
-
+    
     function dropdownLightOnChange() {
-        setLightType(dropdownLight.selectedIndex);
+        spectral.light.type = dropdownLight.selectedIndex;
+        spectral.reset();
     }
 
     /**
-     * Render save
+     * Scene id
      */
-    const btnSaveRender = document.getElementById("btnSave");
-    btnSaveRender.addEventListener("click", () => spectral.saveRender());
-    btnSaveRender.innerText = "Save image";
+    const Scene = {
+        MIXED    : 0,
+        SPHERES  : 1,
+    }
+
+    const dropdownScene = document.getElementById("dropdownScene");
+    dropdownScene.onchange = () => dropdownSceneOnChange();
+    for (var s in Scene) {
+        let o = document.createElement("option");
+        o.innerText = s;
+        dropdownScene.appendChild(o);
+    }
+
+    function dropdownSceneOnChange() {
+        spectral.sceneId = dropdownScene.selectedIndex;
+        let lt;
+        switch (spectral.sceneId) {
+            case Scene.MIXED:
+                lt = LightType.POINT;
+                spectral.light = new Light(lt, new Vector2(0.4, 0.4), new Vector2(1.0, 0.0), spectral.lightPower);
+                dropdownLight.selectedIndex = lt;
+            break;
+            case Scene.SPHERES:
+                lt = LightType.BEAM;
+                spectral.light = new Light(lt, new Vector2(-1.37, 0.52), new Vector2(1.0, -0.625), spectral.lightPower);
+            break;
+            default:
+                lt = LightType.POINT;
+                spectral.light = new Light(lt, new Vector2(0.4, 0.4), new Vector2(1.0, 0.0), spectral.lightPower);
+            break;
+        }
+            
+        dropdownLight.selectedIndex = lt;            
+        spectral.reset();
+    }
+
+    /**
+     * Scene walls
+     */
+    const checkboxWalls = document.getElementById("checkboxWalls");
+    checkboxWalls.checked = true;
+
+    checkboxWalls.onchange = function() {
+        spectral.sceneWalls = checkboxWalls.checked;
+        spectral.reset();
+    }
+
+    /**
+     * Rays amount per frame
+     */
+    const textRayAmount = document.getElementById("textRayAmount");
+
+    textRayAmount.oninput = function() {
+        spectral.rayAmount = Math.min(Math.max(this.value, 1), 15000);
+        textRayAmount.value = spectral.rayAmount;
+        spectral.reset();
+    }
+
+    /**
+     * Rays depth
+     */
+    const sliderDepth = document.getElementById("sliderDepth");
+    sliderDepth.oninput = function() {
+        spectral.rayDepth = this.value;
+        spectral.reset();
+    }
 
     /**
      * Rays progress
@@ -119,8 +187,16 @@ async function start() {
         let raysTraced = spectral.rayAmount * spectral.frameCounter;
         let raysTotal  = spectral.rayAmount * spectral.iterationsMax;
         let percentage = raysTraced / raysTotal * 100.0;
-        textProgress.innerText = raysTraced + " rays traced: " + percentage.toFixed(0) + "%.";
+        textProgress.innerText = `${raysTraced} / ${raysTotal} rays traced: ${percentage.toFixed(0)}%.`;
     }
+    
+    /**
+     * Render save
+     */
+    const btnSaveRender = document.getElementById("btnSave");
+    btnSaveRender.addEventListener("click", () => spectral.saveRender());
+    btnSaveRender.innerText = "Save image";
+
     
     const spectral = new Spectral(device, canvas, settings, () => progressUpdate());
 

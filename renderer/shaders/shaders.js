@@ -13,7 +13,9 @@ struct VSOutput {
     @builtin(instance_index) instanceIndex: u32
 ) -> VSOutput {
     var vsOut: VSOutput;
-    vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2], 0.0, 1.0);
+    var position = positions[vertexIndex + instanceIndex * 2];
+    position.x *= 6.0 / 9.0;
+    vsOut.position = vec4f(position, 0.0, 1.0);
     vsOut.color = colors[instanceIndex];
     return vsOut;
 }
@@ -100,6 +102,8 @@ struct Object {
 @group(0) @binding(5) var<uniform> rayAmount:  i32;
 @group(0) @binding(6) var<uniform> rayDepth:   i32;
 @group(0) @binding(7) var<uniform> light: Light;
+@group(0) @binding(8) var<uniform> sceneId:    u32;
+@group(0) @binding(9) var<uniform> sceneWalls: u32;
 
 // Fix undefined behaviour of sqrt of negative zero/value for mobile
 fn sqrt_positive(value : f32) -> f32 {
@@ -333,23 +337,25 @@ fn scatter(ray : Ray, hit : RayHit, random : f32) -> vec2f {
     return scattered;
 }
 
-fn scene(ray : Ray) -> RayHit {
+fn scene0(ray : Ray) -> RayHit {
     var hit : RayHit;
     var tmp : RayHit;
     hit.t = 100000.0;
     tmp.t = -1.0;
 
-    let lines = array<vec4f, 4>(
-        vec4f(0.0, 1.0, 0.0, -1.0),
-        vec4f(0.0, -1.0, 0.0, 1.0),
-        vec4f(1.0, 0.0, -1.0, 0.0),
-        vec4f(-1.0, 0.0, 1.0, 0.0),
-    );
+    if (sceneWalls == 1) {
+        let lines = array<vec4f, 4>(
+            vec4f(0.0, 1.0, 0.0, -1.0),
+            vec4f(0.0, -1.0, 0.0, 1.0),
+            vec4f(1.5, 0.0, -1.0, 0.0),
+            vec4f(-1.5, 0.0, 1.0, 0.0),
+        );
 
-    for (var i = 0; i < 4; i++) {
-        tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
-        if (tmp.t > 0.0 && tmp.t < hit.t) {
-            hit = tmp;
+        for (var i = 0; i < 4; i++) {
+            tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
         }
     }
 
@@ -392,6 +398,67 @@ fn scene(ray : Ray) -> RayHit {
     return hit;
 }
 
+fn scene1(ray : Ray) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    if (sceneWalls == 1) {
+        let lines = array<vec4f, 4>(
+            vec4f(0.0, 1.0, 0.0, -1.0),
+            vec4f(0.0, -1.0, 0.0, 1.0),
+            vec4f(1.5, 0.0, -1.0, 0.0),
+            vec4f(-1.5, 0.0, 1.0, 0.0),
+        );
+
+        for (var i = 0; i < 4; i++) {
+            tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
+        }
+    }
+
+    let bounded_lines = array<vec4f, 2>(
+        vec4f(0.65, -0.75, normalize(vec2f(-0.270848, 0.962621))),
+        vec4f(1.35, 0.65, normalize(vec2f(0.733721, 0.7945))),
+    );
+
+    for (var i = 0; i < 2; i++) {
+        tmp = intersect_bounded_line(ray, bounded_lines[i].xy, bounded_lines[i].zw, 0.3, 2);
+        if (tmp.t > 0.0 && tmp.t < hit.t) {
+            hit = tmp;
+        }
+    }
+
+    let spheres = array<vec3f, 3>(
+        vec3f(-0.95,   0.25,    0.48), 
+        vec3f(-0.15,  -0.25,    0.21), 
+        vec3f(1.11667, 0.18333, 0.2), 
+    );
+
+    for (var i = 0; i < 3; i++) {
+        tmp = intersect_circle(ray, spheres[i].xy, spheres[i].z, 0);
+        if (tmp.t > 0.0 && tmp.t < hit.t) {
+            hit = tmp;
+        }
+    }
+
+    return hit;
+}
+
+fn get_scene(ray : Ray) -> RayHit {
+    switch sceneId {
+        case 0, default: {
+            return scene0(ray);
+        }
+        case 1: {
+            return scene1(ray);
+        }
+    }
+}
+
 fn generate_from_light(random : RandomInitials) -> Ray {
     var ray : Ray;
 
@@ -407,7 +474,7 @@ fn generate_from_light(random : RandomInitials) -> Ray {
             ray.direction = light.direction;
             var ortogonal = vec2f(ray.direction.y, -ray.direction.x);
 
-            ray.origin = light.position + (random.direction * 2.0 - 1.0) * ortogonal * 0.1;
+            ray.origin = light.position + (random.direction * 2.0 - 1.0) * ortogonal * 0.2;
         }
         case 2: { // Laser
             ray.origin = light.position;
@@ -430,7 +497,7 @@ fn generate_from_light(random : RandomInitials) -> Ray {
     let color = cie_to_rgb(ray.wavelength);
 
     for (var depth = 0; depth < rayDepth; depth++) {
-        var hit = scene(ray);
+        var hit = get_scene(ray);
         
         if (hit.t > 0.0) {
             length = hit.t;

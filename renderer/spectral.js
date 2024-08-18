@@ -14,16 +14,17 @@ export class Spectral {
         this.settings = settings;
         this.progressCallback = progressCallback;
 
-        this.lightPower = 250;
+        this.lightPower = 150;
         this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(1.0, 0.0), this.lightPower);
-        //this.light = new Light(LightType.BEAM, new Vector2(0.0, 0.0), new Vector2(1.0, 0.0), this.lightPower);
-        //this.light = new Light(LightType.LASER, new Vector2(0.0, 0.0), new Vector2(1.0, 0.0), this.lightPower);
+        this.sceneId = 0;
+        this.sceneWalls = 1;
         this.rayAmount = 15000;
         this.rayDepth = 11;
         this.frameCounter = 1;
         this.isDone = false;
 
-        this.iterationsMax = 1000;
+        this.targetRayAmount = 20000000;
+        this.iterationsMax = Math.ceil(this.targetRayAmount / this.rayAmount);
         this.setup();
     }
     
@@ -45,6 +46,8 @@ export class Spectral {
         this.tracePass = new TracePass(
             this.device, 
             this.light,
+            this.sceneId,
+            this.sceneWalls,
             this.rayAmount, 
             this.rayDepth
         );
@@ -113,11 +116,52 @@ export class Spectral {
     reset() {
         this.frameCounter = 1;
         this.device.queue.writeBuffer(this.frameCounterBuffer, 0, new Uint32Array([this.frameCounter]));
-        
-        this.tracePass.reset(this.light);
+        this.iterationsMax = Math.ceil(this.targetRayAmount / this.rayAmount);
+
+        this.tracePass.light = this.light;
+        this.tracePass.sceneId = this.sceneId;
+        this.tracePass.sceneWalls = this.sceneWalls;
+        this.tracePass.rayAmount = this.rayAmount;
+        this.tracePass.rayDepth = this.rayDepth; // TODO move uniform to here
+        this.tracePass.reset();
+
+        this.renderPass.rayAmount = this.rayAmount;
+        this.renderPass.rayDepth = this.rayDepth;
         this.renderPass.reset();
         this.accumPass.reset();
         this.blitPass.reset();
+
+        /* TODO obviously very slow and will fill vram if spammed
+        this.tracePass = new TracePass(
+            this.device, 
+            this.light,
+            this.rayAmount, 
+            this.rayDepth
+        );
+        
+        this.renderPass = new RenderPass(
+            this.device,
+            this.settings,
+            this.tracePass.verticesPerRay, 
+            this.rayAmount, 
+            this.rayDepth,
+            this.tracePass.vertexStorageBuffer, 
+            this.tracePass.colorStorageBuffer
+        );
+        
+        this.accumPass = new AccumulatePass(
+            this.device,
+            this.settings,
+            this.renderPass.raysRenderTexture, 
+            this.frameCounterBuffer
+        );
+        
+        this.blitPass = new BlitPass(
+            this.device, 
+            this.settings,
+            this.accumPass.newAccumulateRenderTexture
+        );
+        */
 
         if (this.isDone) {
             this.isDone = false;

@@ -11,7 +11,9 @@ struct VSOutput {
     @builtin(instance_index) instanceIndex: u32
 ) -> VSOutput {
     var vsOut: VSOutput;
-    vsOut.position = vec4f(positions[vertexIndex + instanceIndex * 2], 0.0, 1.0);
+    var position = positions[vertexIndex + instanceIndex * 2];
+    position.x *= 6.0 / 9.0;
+    vsOut.position = vec4f(position, 0.0, 1.0);
     vsOut.color = colors[instanceIndex];
     return vsOut;
 }

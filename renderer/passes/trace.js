@@ -2,13 +2,19 @@ import { shaderTrace } from "../shaders/shaders.js";
 import { bufferCIEXYZ } from "../tables.js";
 
 export class TracePass {
-    constructor(device, light, rayAmount, rayDepth) {
+    constructor(device, light, sceneId, sceneWalls, rayAmount, rayDepth) {
         this.verticesPerRay = 2;
 
         this.device = device;
         this.light = light;
+        this.sceneId = sceneId;
+        this.sceneWalls = sceneWalls;
         this.rayAmount = rayAmount;
         this.rayDepth = rayDepth;
+
+        // use maximum ray depth so we don't have to reallocate different sized buffers
+        // everytime the user selects a different ray depth
+        this.maxDepth = 20;
 
         this.setup();
     }
@@ -30,10 +36,10 @@ export class TracePass {
         this.vertexUnitSize = 2 * 4; // position is 2 32bit floats (4bytes each)
         this.colorUnitSize  = 4 * 4; // color is 4 32bit floats (4bytes each)
         this.randomUnitSize = 1 * 4;
-        const vertexStorageBufferSize = this.vertexUnitSize * this.verticesPerRay * this.rayAmount * this.rayDepth;
-        const colorStorageBufferSize  = this.colorUnitSize  * this.rayAmount * this.rayDepth;
+        const vertexStorageBufferSize = this.vertexUnitSize * this.verticesPerRay * this.rayAmount * this.maxDepth;
+        const colorStorageBufferSize  = this.colorUnitSize  * this.rayAmount * this.maxDepth;
         const randomInitialsStorageBufferSize = this.randomUnitSize * this.rayAmount * 2;
-        const randomScattersStorageBufferSize = this.randomUnitSize * this.rayAmount * this.rayDepth;
+        const randomScattersStorageBufferSize = this.randomUnitSize * this.rayAmount * this.maxDepth;
         this.verticesArray = new Float32Array(vertexStorageBufferSize / 4);
         this.colorsArray   = new Float32Array(colorStorageBufferSize  / 4);
         this.randomInitialsArray  = new Float32Array(randomInitialsStorageBufferSize / 4);
@@ -69,13 +75,13 @@ export class TracePass {
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
         
-        const rayAmountUniform = this.device.createBuffer({
+        this.rayAmountUniform = this.device.createBuffer({
             label: 'Trace ray amount uniform',
             size: 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        const rayDepthUniform = this.device.createBuffer({
+        this.rayDepthUniform = this.device.createBuffer({
             label: 'Trace ray depth uniform',
             size: 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -94,12 +100,24 @@ export class TracePass {
         });
         
         this.lightUniformValues = new ArrayBuffer(lightUniformSize);
-        this.timeUniform      = new Uint32Array (this.lightUniformValues, 0, 1);
+        this.typeUniform      = new Uint32Array (this.lightUniformValues, 0, 1);
         this.powerUniform     = new Float32Array(this.lightUniformValues, 4, 1);
         this.positionUniform  = new Float32Array(this.lightUniformValues, 8, 2);
         this.directionUniform = new Float32Array(this.lightUniformValues, 16, 2);
         
         this.updateLightUniform();
+
+        this.sceneIdUniform = this.device.createBuffer({
+            label: 'Trace scene id uniform',
+            size: 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        this.sceneWallsUniform = this.device.createBuffer({
+            label: 'Trace scene walls uniform',
+            size: 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
         this.bindGroup = this.device.createBindGroup({
             label: 'Trace binding',
@@ -110,22 +128,22 @@ export class TracePass {
                 { binding: 2, resource: { buffer: this.randomInitialsStorageBuffer } },
                 { binding: 3, resource: { buffer: this.randomScattersStorageBuffer } },
                 { binding: 4, resource: { buffer: cieXYZStorageBuffer } },
-                { binding: 5, resource: { buffer: rayAmountUniform } },
-                { binding: 6, resource: { buffer: rayDepthUniform } },
+                { binding: 5, resource: { buffer: this.rayAmountUniform } },
+                { binding: 6, resource: { buffer: this.rayDepthUniform } },
                 { binding: 7, resource: { buffer: this.lightUniform } },
+                { binding: 8, resource: { buffer: this.sceneIdUniform } },
+                { binding: 9, resource: { buffer: this.sceneWallsUniform } },
             ],
         });
 
         this.device.queue.writeBuffer(cieXYZStorageBuffer, 0, bufferCIEXYZ);
-        this.device.queue.writeBuffer(rayAmountUniform, 0, new Int32Array([this.rayAmount]));
-        this.device.queue.writeBuffer(rayDepthUniform, 0, new Int32Array([this.rayDepth]));
+        this.device.queue.writeBuffer(this.rayAmountUniform, 0, new Int32Array([this.rayAmount]));
+        this.device.queue.writeBuffer(this.rayDepthUniform, 0, new Int32Array([this.rayDepth]));
+        this.device.queue.writeBuffer(this.sceneIdUniform, 0, new Uint32Array([this.sceneId]));
+        this.device.queue.writeBuffer(this.sceneWallsUniform, 0, new Uint32Array([this.sceneWalls]));
     }
 
     run() {
-        /**
-         * GPU ray tracing
-         */
-
         // Generate random numbers on the CPU for simplicity
         this.generateRandoms();
 
@@ -143,13 +161,16 @@ export class TracePass {
         this.device.queue.submit([commandBuffer]);
     }
 
-    reset(light) {
-        this.light = light;
+    reset() {
         this.updateLightUniform();
+        this.device.queue.writeBuffer(this.sceneIdUniform, 0, new Uint32Array([this.sceneId]));
+        this.device.queue.writeBuffer(this.sceneWallsUniform, 0, new Uint32Array([this.sceneWalls]));
+        this.device.queue.writeBuffer(this.rayAmountUniform, 0, new Int32Array([this.rayAmount]));
+        this.device.queue.writeBuffer(this.rayDepthUniform, 0, new Int32Array([this.rayDepth]));
     }
 
     updateLightUniform() {
-        this.timeUniform[0]      = this.light.type;
+        this.typeUniform[0]      = this.light.type;
         this.powerUniform[0]     = this.light.power;
         this.positionUniform[0]  = this.light.position.x;
         this.positionUniform[1]  = this.light.position.y;
@@ -167,7 +188,7 @@ export class TracePass {
         }
         this.device.queue.writeBuffer(this.randomInitialsStorageBuffer, 0, this.randomInitialsArray);
 
-        for (let i = 0; i < this.rayAmount * this.rayDepth; i++) {
+        for (let i = 0; i < this.rayAmount * this.maxDepth; i++) {
             const offset = i * (this.randomUnitSize / 4);
             this.randomScattersArray.set([Math.random()], offset);
         }

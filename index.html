@@ -7,9 +7,32 @@
   <body>
     <main>
       <canvas id="c"></canvas>
-      <p id="textProgress"></p>
-      <select id="dropdownLight"></select>
-      <button id="btnSave"></button>
+      <div>
+        <p>Light type:</p>
+        <select id="dropdownLight"></select>
+      </div>
+      <div>
+        <p>Scene:</p>
+        <select id="dropdownScene"></select>
+      </div>
+      <div>
+        <p>Rays per frame:</p>
+        <input  id="textRayAmount" type="number" min="1" max="100000" value="15000">
+      </div>
+      <div>
+        <p>Ray depth:</p>
+        <input  id="sliderDepth" type="range" class="slider" min="1" max="20" value="11">
+      </div>
+      <div>
+        <p>Walls:</p>
+        <input  id="checkboxWalls" type="checkbox" class="checkbox">
+      </div>
+      <div>
+        <button id="btnSave"></button>
+      </div>
+      <div>
+        <p      id="textProgress"></p>
+      </div>
     </main>
       <script type="module" src="index.js"></script>
     </body>
