@@ -114,6 +114,7 @@ async function start() {
     const Scene = {
         MIXED    : 0,
         SPHERES  : 1,
+        FLOOR    : 2,
     }
 
     const dropdownScene = document.getElementById("dropdownScene");

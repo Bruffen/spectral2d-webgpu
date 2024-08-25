@@ -14,7 +14,7 @@ export class Spectral {
         this.settings = settings;
         this.progressCallback = progressCallback;
 
-        this.lightPower = 150;
+        this.lightPower = 250;
         this.light = new Light(LightType.POINT, new Vector2(0.4, 0.4), new Vector2(1.0, 0.0), this.lightPower);
         this.sceneId = 0;
         this.sceneWalls = 1;

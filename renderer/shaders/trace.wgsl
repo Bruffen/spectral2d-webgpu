@@ -232,8 +232,9 @@ fn material_lambert(ray : Ray, hit : RayHit, random : f32) -> vec2f {
     var scattered : vec2f;
 
     let M_PI = 3.1415926535897932384626433832795;
-    let angle = random * M_PI;
-    var direction = vec2f(cos(angle), sin(angle));
+    let sin_theta = 2.0 * random - 1.0;
+    let cos_theta = sqrt(1.0 - sin_theta * sin_theta);
+    var direction = vec2f(sin_theta, cos_theta);
 
     var normal = hit.normal;
     if (check_for_backface(ray.direction, normal)) {
@@ -251,21 +252,22 @@ fn material_mirror(ray : Ray, hit : RayHit) -> vec2f {
     return reflect(ray.direction, hit.normal);
 }
 
-fn scatter(ray : Ray, hit : RayHit, random : f32) -> vec2f {
+fn scatter(ray : ptr<function, Ray>, hit : RayHit, random : f32) -> vec2f {
     var scattered : vec2f;
 
     switch hit.material {
         case 0: {
-            scattered = material_glass(ray, hit, random);
+            scattered = material_glass(*ray, hit, random);
         }
         case 1, default: {
-            scattered = material_lambert(ray, hit, random);
+            scattered = material_lambert(*ray, hit, random);
+            (*ray).energy *= 0.5; // pdf
         }
         case 2: {
-            scattered = material_mirror(ray, hit);
+            scattered = material_mirror(*ray, hit);
         }
         case 3: {
-            scattered = material_glass_rough(ray, hit, random);
+            scattered = material_glass_rough(*ray, hit, random);
         }
     }
 
@@ -383,6 +385,36 @@ fn scene1(ray : Ray) -> RayHit {
     return hit;
 }
 
+fn scene2(ray : Ray) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    if (sceneWalls == 1) {
+        let lines = array<vec4f, 4>(
+            vec4f(0.0, 1.0, 0.0, -1.0),
+            vec4f(0.0, -1.0, 0.0, 1.0),
+            vec4f(1.5, 0.0, -1.0, 0.0),
+            vec4f(-1.5, 0.0, 1.0, 0.0),
+        );
+
+        for (var i = 0; i < 4; i++) {
+            tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
+        }
+    }
+
+    tmp = intersect_line(ray,  vec2f(0.0, -0.5), vec2f(0.0, 1.0), 1);
+    if (tmp.t > 0.0 && tmp.t < hit.t) {
+        hit = tmp;
+    }
+    
+    return hit;
+}
+
 fn get_scene(ray : Ray) -> RayHit {
     switch sceneId {
         case 0, default: {
@@ -390,6 +422,9 @@ fn get_scene(ray : Ray) -> RayHit {
         }
         case 1: {
             return scene1(ray);
+        }
+        case 2: {
+            return scene2(ray);
         }
     }
 }
@@ -449,9 +484,9 @@ fn generate_from_light(random : RandomInitials) -> Ray {
         let r = random_scatters[i * rayDepth + depth];
         
         if (hit.t > 0.0) {
-            ray.direction = scatter(ray, hit, r);
+            ray.direction = scatter(&ray, hit, r);
         }
-        ray.origin = ray.origin + step + ray.direction * 0.0001;
+        ray.origin = ray.origin + step + ray.direction * 0.00005;
 
         length = 10.0;
     }
