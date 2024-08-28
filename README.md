@@ -5,7 +5,6 @@
 - ~~Create a main class;~~
 - ~~Simplify variable names in their own class;~~
 - ~~Make light uniform work;~~
-- Make common screen quad vertex shader;
 - ~~Do bounds collision~~;
 - ~~Do sphere intersection;~~
 - ~~Do prism intersection;~~
@@ -22,7 +21,7 @@
   - ~~Lambertian diffuse;~~
   - Metal;
   - ~~Mirror.~~
-- Aspect ratio;
+- Send inverse aspect ratio to render shader;
 - Change intersect_triangle to return an array of lines of any object;
 - Implement light colors besides white;
 - Implement transient rendering;
@@ -34,7 +33,7 @@
 
 - ~~Sphere intersection has weird results when light position is inside of sphere;~~
 - ~~GUI callback happens twice;~~
-- Need to divide energy by pdf?
+- ~~Need to divide energy by pdf?~~
 - ~~If alpha is over one, it will be opaque instead of blending;~~
 - If light intensity is multiplied after rgb conversion, some colors will disappear;
 - ~~Mobile devices have anti-aliasing already; (it's just bad line rasterization)~~
