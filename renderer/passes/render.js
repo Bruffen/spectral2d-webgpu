@@ -57,6 +57,12 @@ export class RenderPass {
                 topology: 'line-list',
             },
         });
+
+        this.inverseScaleUniform = this.device.createBuffer({
+            label: 'Rays world scale inverse uniform buffer',
+            size: 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
     
         this.bindGroup = this.device.createBindGroup({
             label: 'Rays render binding',
@@ -64,8 +70,11 @@ export class RenderPass {
             entries: [
                 { binding: 0, resource: { buffer: this.vertexStorageBuffer } },
                 { binding: 1, resource: { buffer: this.colorStorageBuffer } },
+                { binding: 2, resource: { buffer: this.inverseScaleUniform } },
             ],
         });
+
+        this.device.queue.writeBuffer(this.inverseScaleUniform, 0, new Float32Array([1.0 / 1.0]));
 
         this.renderPassDescriptor = {
             label: 'Rays render renderpass',

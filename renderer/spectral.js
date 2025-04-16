@@ -9,7 +9,7 @@ import { BlitPass } from "./passes/blit.js";
 export class Spectral {
     constructor(device, canvas, settings, progressCallback) {
         this.device = device;
-        this.canvas = canvas
+        this.canvas = canvas;
         this.context = canvas.getContext('webgpu');
         this.settings = settings;
         this.progressCallback = progressCallback;

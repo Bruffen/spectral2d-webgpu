@@ -113,8 +113,10 @@ async function start() {
      */
     const Scene = {
         MIXED    : 0,
-        SPHERES  : 1,
-        FLOOR    : 2,
+        PRISM    : 1,
+        SPHERES  : 2,
+        FLOOR    : 3,
+        POLYGON  : 4,
     }
 
     const dropdownScene = document.getElementById("dropdownScene");
@@ -133,6 +135,10 @@ async function start() {
                 lt = LightType.POINT;
                 spectral.light = new Light(lt, new Vector2(0.4, 0.4), new Vector2(1.0, 0.0), spectral.lightPower);
                 dropdownLight.selectedIndex = lt;
+            break;
+            case Scene.PRISM:
+                lt = LightType.LASER;
+                spectral.light = new Light(lt, new Vector2(-1.5, -0.8), new Vector2(1.0, 0.7), spectral.lightPower);
             break;
             case Scene.SPHERES:
                 lt = LightType.BEAM;

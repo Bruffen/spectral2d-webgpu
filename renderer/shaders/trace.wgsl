@@ -39,6 +39,7 @@ struct Object {
 @group(0) @binding(7) var<uniform> light: Light;
 @group(0) @binding(8) var<uniform> sceneId:    u32;
 @group(0) @binding(9) var<uniform> sceneWalls: u32;
+//@group(0) @binding(10) var<uniform> sceneScale: f32;
 
 // Fix undefined behaviour of sqrt of negative zero/value for mobile
 fn sqrt_positive(value : f32) -> f32 {
@@ -67,6 +68,10 @@ fn cie_to_rgb(wavelength : f32) -> vec3f {
 
     return rgb;
 }
+
+//-------------------------------------------------------------------------------------------------
+// Intersections
+//-------------------------------------------------------------------------------------------------
 
 fn intersect_line(ray : Ray, center : vec2f, normal : vec2f, m : u32) -> RayHit {
     var hit : RayHit;
@@ -165,6 +170,51 @@ fn intersect_triangle(ray : Ray, points : array<vec2f, 3>, material : u32) -> Ra
     return hit;
 }
 
+fn intersect_polygon(ray : Ray, position : vec2f, size : vec2f, points_count : i32, material : u32) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    let M_PI = 3.1415926535897932384626433832795;
+    
+    var points  = array<vec2f, 20>();
+    var centres = array<vec2f, 20>();
+    var sizes   = array<f32,   20>();
+    var normals = array<vec2f, 20>();
+
+    let angle_increment = 1.0 / f32(points_count) * -2.0 * M_PI;
+    let angle_start = M_PI * 0.5;
+    for (var i = 0; i < points_count; i++) {
+        let angle = angle_start + f32(i) * angle_increment;
+        var pos = vec2f(cos(angle), sin(angle)) * size; //select(size, size * 0.4, i % 2 == 0);
+        points[i] = pos + position;
+    }
+
+    for (var i = 0; i < points_count; i++) {
+        centres[i] = (points[i] + points[(i+1) % points_count]) * 0.5;
+        
+        let l = points[i] - points[(i+1) % points_count];
+        sizes[i] = length(l) * 0.5;
+
+        let p = normalize(l);
+        normals[i] = vec2f(p.y, -p.x);
+    }
+
+    for (var i = 0; i < points_count; i++) {
+        tmp = intersect_bounded_line(ray, centres[i], normals[i], sizes[i], material);
+        if (tmp.t > 0.0 && tmp.t < hit.t) {
+            hit = tmp;
+        }
+    }
+
+    return hit;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Materials
+//-------------------------------------------------------------------------------------------------
+
 fn reflectance(cosine : f32, refraction_index : f32) -> f32 {
     // Use Schlick's approximation for reflectance.
     var r0 = (1.0 - refraction_index) / (1.0 + refraction_index);
@@ -172,12 +222,8 @@ fn reflectance(cosine : f32, refraction_index : f32) -> f32 {
     return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
 }
 
-fn cauchy_ior(wavelength : f32) -> f32 {
-    // Cauchy's transmission equation, which is a simple approximation
-    // for hard crown glass K5	
-    let a = 1.522;
-    let b = 0.00459;
-    
+// Cauchy's transmission equation, which is a simple approximation
+fn cauchy_ior(wavelength : f32, a : f32, b : f32) -> f32 {
     // scale it so the effect is noticeable in our coordinate space
     let scale = 10000.0;
 
@@ -188,10 +234,10 @@ fn check_for_backface(direction : vec2f, normal : vec2f) -> bool {
     return dot(direction, normal) > 0.0;
 }
 
-fn material_glass(ray : Ray, hit : RayHit, random : f32) -> vec2f {
+fn material_glass(ray : Ray, hit : RayHit, random : f32, cauchy_a : f32, cauchy_b : f32) -> vec2f {
     var scattered : vec2f;
     
-    var index_refraction = cauchy_ior(ray.wavelength);
+    var index_refraction = cauchy_ior(ray.wavelength, cauchy_a, cauchy_b);
     let backface = check_for_backface(ray.direction, hit.normal);
     var normal = hit.normal;
 
@@ -216,8 +262,8 @@ fn material_glass(ray : Ray, hit : RayHit, random : f32) -> vec2f {
 }
 
 // TODO review
-fn material_glass_rough(ray : Ray, hit : RayHit, random : f32) -> vec2f {
-    var scattered = material_glass(ray, hit, random);
+fn material_glass_rough(ray : Ray, hit : RayHit, random : f32, cauchy_a : f32, cauchy_b : f32) -> vec2f {
+    var scattered = material_glass(ray, hit, random, cauchy_a, cauchy_b);
 
     let M_PI = 3.1415926535897932384626433832795;
     let angle = random * M_PI;
@@ -257,7 +303,9 @@ fn scatter(ray : ptr<function, Ray>, hit : RayHit, random : f32) -> vec2f {
 
     switch hit.material {
         case 0: {
-            scattered = material_glass(*ray, hit, random);
+            let a = 1.522;
+            let b = 0.00459;
+            scattered = material_glass(*ray, hit, random, a, b);
         }
         case 1, default: {
             scattered = material_lambert(*ray, hit, random);
@@ -267,12 +315,23 @@ fn scatter(ray : ptr<function, Ray>, hit : RayHit, random : f32) -> vec2f {
             scattered = material_mirror(*ray, hit);
         }
         case 3: {
-            scattered = material_glass_rough(*ray, hit, random);
+            let a = 1.522;
+            let b = 0.00459;
+            scattered = material_glass_rough(*ray, hit, random, a, b);
+        }
+        case 4: {
+            let a = 2.378;
+            let b = 0.00801;
+            scattered = material_glass_rough(*ray, hit, random, a, b);
         }
     }
 
     return scattered;
 }
+
+//-------------------------------------------------------------------------------------------------
+// Scenes
+//-------------------------------------------------------------------------------------------------
 
 fn scene0(ray : Ray) -> RayHit {
     var hit : RayHit;
@@ -357,6 +416,36 @@ fn scene1(ray : Ray) -> RayHit {
         }
     }
 
+    tmp = intersect_polygon(ray, vec2f(0.0, -0.2), vec2f(0.65, 0.65), 3, 3);
+    if (tmp.t > 0.0 && tmp.t < hit.t) {
+        hit = tmp;
+    }
+
+    return hit;
+}
+
+fn scene2(ray : Ray) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    if (sceneWalls == 1) {
+        let lines = array<vec4f, 4>(
+            vec4f(0.0, 1.0, 0.0, -1.0),
+            vec4f(0.0, -1.0, 0.0, 1.0),
+            vec4f(1.5, 0.0, -1.0, 0.0),
+            vec4f(-1.5, 0.0, 1.0, 0.0),
+        );
+
+        for (var i = 0; i < 4; i++) {
+            tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
+        }
+    }
+
     let bounded_lines = array<vec4f, 2>(
         vec4f(0.65, -0.75, normalize(vec2f(-0.270848, 0.962621))),
         vec4f(1.35, 0.65, normalize(vec2f(0.733721, 0.7945))),
@@ -385,7 +474,7 @@ fn scene1(ray : Ray) -> RayHit {
     return hit;
 }
 
-fn scene2(ray : Ray) -> RayHit {
+fn scene3(ray : Ray) -> RayHit {
     var hit : RayHit;
     var tmp : RayHit;
     hit.t = 100000.0;
@@ -415,6 +504,36 @@ fn scene2(ray : Ray) -> RayHit {
     return hit;
 }
 
+fn scene4(ray : Ray) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    if (sceneWalls == 1) {
+        let lines = array<vec4f, 4>(
+            vec4f(0.0, 1.0, 0.0, -1.0),
+            vec4f(0.0, -1.0, 0.0, 1.0),
+            vec4f(1.5, 0.0, -1.0, 0.0),
+            vec4f(-1.5, 0.0, 1.0, 0.0),
+        );
+
+        for (var i = 0; i < 4; i++) {
+            tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
+        }
+    }
+
+    tmp = intersect_polygon(ray, vec2f(0.0, 0.0), vec2f(0.2, 0.3), 20, 4);
+    if (tmp.t > 0.0 && tmp.t < hit.t) {
+        hit = tmp;
+    }
+    
+    return hit;
+}
+
 fn get_scene(ray : Ray) -> RayHit {
     switch sceneId {
         case 0, default: {
@@ -426,8 +545,18 @@ fn get_scene(ray : Ray) -> RayHit {
         case 2: {
             return scene2(ray);
         }
+        case 3: {
+            return scene3(ray);
+        }
+        case 4: {
+            return scene4(ray);
+        }
     }
 }
+
+//-------------------------------------------------------------------------------------------------
+// Generation
+//-------------------------------------------------------------------------------------------------
 
 fn generate_from_light(random : RandomInitials) -> Ray {
     var ray : Ray;
