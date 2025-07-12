@@ -600,6 +600,44 @@ fn scene4(ray : Ray) -> RayHit {
     return hit;
 }
 
+fn scene5(ray : Ray) -> RayHit {
+    var hit : RayHit;
+    var tmp : RayHit;
+    hit.t = 100000.0;
+    tmp.t = -1.0;
+
+    if (sceneWalls == 1) {
+        let lines = array<vec4f, 4>(
+            vec4f(0.0, 1.0, 0.0, -1.0),
+            vec4f(0.0, -1.0, 0.0, 1.0),
+            vec4f(1.5, 0.0, -1.0, 0.0),
+            vec4f(-1.5, 0.0, 1.0, 0.0),
+        );
+
+        for (var i = 0; i < 4; i++) {
+            tmp = intersect_line(ray, lines[i].xy, lines[i].zw, 1);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
+        }
+    }
+
+    let start_pos = vec2f(-0.9, -0.7);
+    let add_pos   = vec2f(0.08, 0.08);
+    for (var i = 0; i < 30; i++) {
+        for (var j = 0; j < 20; j++) {
+            let pos = start_pos + vec2f(add_pos.x * f32(i), add_pos.y * f32(j));
+            let random_offset = vec2f(fract(pos.x * pos.y * 10.993483), fract(pos.x / pos.y * 123.14234)) * 0.02;
+            tmp = intersect_circle(ray, pos + random_offset, 0.03, 3);
+            if (tmp.t > 0.0 && tmp.t < hit.t) {
+                hit = tmp;
+            }
+        }
+    }
+    
+    return hit;
+}
+
 fn get_scene(ray : Ray) -> RayHit {
     switch sceneId {
         case 0, default: {
@@ -616,6 +654,9 @@ fn get_scene(ray : Ray) -> RayHit {
         }
         case 4: {
             return scene4(ray);
+        }
+        case 5: {
+            return scene5(ray);
         }
     }
 }

@@ -117,6 +117,7 @@ async function start() {
         SPHERES  : 2,
         FLOOR    : 3,
         POLYGON  : 4,
+        MANY     : 5,
     }
 
     const dropdownScene = document.getElementById("dropdownScene");

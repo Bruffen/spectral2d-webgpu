@@ -14,7 +14,7 @@ export class TracePass {
 
         // use maximum ray depth so we don't have to reallocate different sized buffers
         // everytime the user selects a different ray depth
-        this.maxDepth = 20;
+        this.maxDepth = 100;
 
         this.setup();
     }
